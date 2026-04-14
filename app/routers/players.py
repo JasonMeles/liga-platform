@@ -1,41 +1,46 @@
-from fastapi import APIRouter
-from app.schemas.player import PlayerCreate
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.database.connection import get_db
+from app.models.player import Player
+from app.schemas.player import PlayerCreate, PlayerResponse
 
 router = APIRouter(
     prefix="/players",
     tags=["players"]
 )
 
-players_db = []
+@router.post("/", response_model=PlayerResponse)
+async def create_player(player: PlayerCreate, db: AsyncSession = Depends(get_db)):
+    db_player = Player(
+        username=player.username,
+        email=player.email
+    )
+    db.add(db_player)
+    await db.commit()
+    await db.refresh(db_player)
+    return db_player
 
-@router.post("/")
-async def create_player(player: PlayerCreate):
-    players_db.append(player.model_dump())
-    return {"message": "Joueur créé avec succès", "player": player}
+@router.get("/", response_model=list[PlayerResponse])
+async def get_players(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Player))
+    players = result.scalars().all()
+    return players
 
-@router.get("/")
-async def get_players():
-    return {"players": players_db}
-
-@router.get("/{player_id}")
-async def get_player(player_id: int):
-    if player_id < 0 or player_id >= len(players_db):
+@router.get("/{player_id}", response_model=PlayerResponse)
+async def get_player(player_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Player).where(Player.id == player_id))
+    player = result.scalar_one_or_none()
+    if player is None:
         raise HTTPException(status_code=404, detail="Joueur introuvable")
-    return {"player": players_db[player_id]}
+    return player
 
 @router.delete("/{player_id}")
-async def delete_player(player_id: int):
-    if player_id < 0 or player_id >= len(players_db):
+async def delete_player(player_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Player).where(Player.id == player_id))
+    player = result.scalar_one_or_none()
+    if player is None:
         raise HTTPException(status_code=404, detail="Joueur introuvable")
-    deleted_player = players_db[player_id]["username"]
-    players_db.pop(player_id)
-    return {"message": f"Joueur {deleted_player} a été supprimé"}
-
-@router.put("/{player_id}")
-async def update_player(player_id: int, player: PlayerCreate):
-    if player_id < 0 or player_id >= len(players_db):
-        raise HTTPException(status_code=404, detail="Joueur introuvable")
-    old_username = players_db[player_id]["username"]
-    players_db[player_id] = player.model_dump()
-    return {"message": f"Joueur {old_username} mis à jour", "player": players_db[player_id]}
+    await db.delete(player)
+    await db.commit()
+    return {"message": f"Joueur {player_id} supprimé"}
