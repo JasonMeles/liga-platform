@@ -4,6 +4,7 @@ from sqlalchemy import select
 from app.database.connection import get_db
 from app.models.player import Player
 from app.schemas.player import PlayerCreate, PlayerResponse
+from app.core.dependencies import get_current_player
 
 router = APIRouter(
     prefix="/players",
@@ -27,6 +28,14 @@ async def get_players(db: AsyncSession = Depends(get_db)):
     players = result.scalars().all()
     return players
 
+@router.get("/profil")
+async def get_profil(current_player: Player = Depends(get_current_player)):
+    return {
+        "username": current_player.username,
+        "email": current_player.email,
+    }
+
+
 @router.get("/{player_id}", response_model=PlayerResponse)
 async def get_player(player_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Player).where(Player.id == player_id))
@@ -34,6 +43,7 @@ async def get_player(player_id: int, db: AsyncSession = Depends(get_db)):
     if player is None:
         raise HTTPException(status_code=404, detail="Joueur introuvable")
     return player
+
 
 @router.delete("/{player_id}")
 async def delete_player(player_id: int, db: AsyncSession = Depends(get_db)):
@@ -44,3 +54,5 @@ async def delete_player(player_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(player)
     await db.commit()
     return {"message": f"Joueur {player_id} supprimé"}
+
+

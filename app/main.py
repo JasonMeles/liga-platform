@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import players
+from app.routers import players, auth
 
 app = FastAPI(
     title="Liga Platform API",
@@ -8,6 +8,7 @@ app = FastAPI(
 )
 
 app.include_router(players.router) 
+app.include_router(auth.router)
 
 @app.get("/")
 async def root():
@@ -16,3 +17,4 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
