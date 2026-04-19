@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.database.connection import get_db
 from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum
+from app.models.team import Team
 from app.core.dependencies import get_current_player
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
@@ -12,6 +13,8 @@ router = APIRouter(prefix="/leagues", tags=["Leagues"])
 
 class LeagueCreate(BaseModel):
     name: str
+    max_teams: int
+    max_per_player: int
 
 
 class LeagueResponse(BaseModel):
@@ -20,6 +23,12 @@ class LeagueResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class EquipeResponse(BaseModel):
+    id: int
+    nom: str
+    nom_stade: str
+
+    model_config = {"from_attributes": True}
 
 @router.post("/", response_model=LeagueResponse)
 async def create_league(
@@ -34,7 +43,10 @@ async def create_league(
         raise HTTPException(status_code=400, detail="Ce nom de ligue est déjà pris")
 
     # Crée la ligue
-    league = League(name=data.name)
+    league = League(
+        name=data.name,
+        max_team=data.max_teams,
+        max_per_player=data.max_per_player)
     db.add(league)
     await db.commit()
     await db.refresh(league)  # ← on a besoin de league.id pour l'étape suivante
@@ -59,6 +71,14 @@ async def get_leagues(
     result = await db.execute(select(League))
     return result.scalars().all()
 
+@router.get("/{league_id}/teams", response_model=list[EquipeResponse])
+async def get_teams(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    result = await db.execute(select(Team).where(Team.id_league == league_id))
+    return result.scalars().all()
 
 @router.post("/{league_id}/join")
 async def join_league(

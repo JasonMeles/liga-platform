@@ -5,6 +5,10 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
 from sqlalchemy.sql import func
 import enum
 
+class PlayerTypeEnum(str, enum.Enum):
+    humain = "humain"
+    ia = "ia"
+
 class Player(Base):
     __tablename__ = "players"
 
@@ -13,8 +17,7 @@ class Player(Base):
     email = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     hashed_password = Column(String, nullable=False)
-
-
+    player_type = Column(Enum(PlayerTypeEnum), nullable=False, default=PlayerTypeEnum.humain)
 
 
 class RefreshToken(Base):
@@ -30,12 +33,15 @@ class LeagueRoleEnum(str, enum.Enum):
     manager = "manager"
     membre = "membre"
 
+
 class League(Base):
     __tablename__ = "leagues"
 
     id         = Column(Integer, primary_key=True, index=True)
     name       = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    max_team = Column(Integer, nullable=False)
+    max_per_player = Column(Integer, nullable=False)
 
 class PlayerLeague(Base):
     __tablename__ = "player_leagues"
