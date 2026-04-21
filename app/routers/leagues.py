@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-
+from sqlalchemy.orm import joinedload
 from app.database.connection import get_db
 from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum
 from app.models.team import Team
@@ -20,6 +20,8 @@ class LeagueCreate(BaseModel):
 class LeagueResponse(BaseModel):
     id: int
     name: str
+    manager_username: str
+    is_active : bool
 
     model_config = {"from_attributes": True}
 
@@ -27,8 +29,12 @@ class EquipeResponse(BaseModel):
     id: int
     nom: str
     nom_stade: str
+    owner_username : str
 
     model_config = {"from_attributes": True}
+
+class LigueValidateResponse(BaseModel):
+    is_active : bool
 
 @router.post("/", response_model=LeagueResponse)
 async def create_league(
@@ -68,8 +74,39 @@ async def get_leagues(
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player),
 ):
-    result = await db.execute(select(League))
-    return result.scalars().all()
+    result = await db.execute(select(League).options(joinedload(League.player_leagues).joinedload(PlayerLeague.player)))
+    return result.unique().scalars().all()
+
+@router.post("/{league_id}/validate", response_model=LigueValidateResponse)
+async def validate_league(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    # 1. Vérifie que le joueur est bien manager de CETTE ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league_id,
+            PlayerLeague.role == LeagueRoleEnum.manager,
+        )
+    )
+    manager = result.scalars().first()
+    if not manager:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas manager de cette ligue")
+
+    # 2. Récupère la ligue
+    result = await db.execute(select(League).filter(League.id == league_id))
+    league = result.scalars().first()
+    if not league:
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    # 3. Active la ligue
+    league.is_active = True
+    await db.commit()
+    await db.refresh(league)
+
+    return league
 
 @router.get("/{league_id}/teams", response_model=list[EquipeResponse])
 async def get_teams(
@@ -77,8 +114,9 @@ async def get_teams(
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player),
 ):
-    result = await db.execute(select(Team).where(Team.id_league == league_id))
-    return result.scalars().all()
+    result = await db.execute(select(Team).options(joinedload(Team.owner)).where(Team.id_league == league_id))
+    teams = result.unique().scalars().all()
+    return teams
 
 @router.post("/{league_id}/join")
 async def join_league(

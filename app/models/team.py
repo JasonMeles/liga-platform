@@ -3,6 +3,7 @@ from app.database.connection import Base
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.sql import func
 import enum
+from sqlalchemy.orm import relationship
 
 class Team(Base):
     __tablename__ = "equipes"
@@ -13,4 +14,7 @@ class Team(Base):
     nom_stade= Column(String, nullable=False)
     id_owner= Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=False)
     id_league= Column(Integer, ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False)
-    
+    owner = relationship("Player", foreign_keys=[id_owner])
+    @property
+    def owner_username(self) -> str:
+        return self.owner.username
