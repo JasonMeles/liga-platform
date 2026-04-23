@@ -44,6 +44,7 @@ class League(Base):
     max_team = Column(Integer, nullable=False)
     max_per_player = Column(Integer, nullable=False)
     is_active = Column(Boolean, default = False, server_default="false", nullable = False )
+    total_journeys = Column(Integer, nullable=False)
     player_leagues = relationship("PlayerLeague")
     @property 
     def manager_username(self) -> str: 

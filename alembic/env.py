@@ -10,6 +10,7 @@ from alembic import context
 from app.database.connection import Base
 from app.models.player import Player
 from app.models.team import Team 
+from app.models.match import Match
 
 load_dotenv()
 

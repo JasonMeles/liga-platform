@@ -7,6 +7,11 @@ from app.database.connection import get_db
 from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum
 from app.models.team import Team
 from app.core.dependencies import get_current_player
+from app.models.match import Match
+from app.models.team import Team
+from app.services.match_generator import generate_matches
+from sqlalchemy import or_
+from app.models.match import Match, MatchState
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
 
@@ -15,6 +20,7 @@ class LeagueCreate(BaseModel):
     name: str
     max_teams: int
     max_per_player: int
+    total_journeys: int
 
 
 class LeagueResponse(BaseModel):
@@ -22,6 +28,7 @@ class LeagueResponse(BaseModel):
     name: str
     manager_username: str
     is_active : bool
+    total_journeys : int
 
     model_config = {"from_attributes": True}
 
@@ -30,6 +37,7 @@ class EquipeResponse(BaseModel):
     nom: str
     nom_stade: str
     owner_username : str
+    journeys_remaining: int
 
     model_config = {"from_attributes": True}
 
@@ -52,7 +60,8 @@ async def create_league(
     league = League(
         name=data.name,
         max_team=data.max_teams,
-        max_per_player=data.max_per_player)
+        max_per_player=data.max_per_player,
+        total_journeys=data.total_journeys)
     db.add(league)
     await db.commit()
     await db.refresh(league)  # ← on a besoin de league.id pour l'étape suivante
@@ -66,7 +75,12 @@ async def create_league(
     db.add(player_league)
     await db.commit()
 
-    return league
+    return {
+    "id": league.id,
+    "name": league.name,
+    "manager_username": current_player.username,
+    "is_active": league.is_active
+    }
 
 
 @router.get("/", response_model=list[LeagueResponse])
@@ -100,8 +114,24 @@ async def validate_league(
     league = result.scalars().first()
     if not league:
         raise HTTPException(status_code=404, detail="Ligue introuvable")
+    if league.is_active:
+        raise HTTPException(status_code=400, detail="Cette ligue est déjà validée")
+    
+        # 3. Récupère les équipes de la ligue
+    result = await db.execute(
+        select(Team).filter(Team.id_league == league_id)
+    )
+    equipes = result.scalars().all()
 
-    # 3. Active la ligue
+    if len(equipes) < 2:
+        raise HTTPException(status_code=400, detail="La ligue doit avoir au moins 2 équipes")
+
+    # 4. Génère les matchs
+    matchs = generate_matches(list(equipes), league.total_journeys)
+    for match in matchs:
+        db.add(match)
+
+    # 5. Active la ligue
     league.is_active = True
     await db.commit()
     await db.refresh(league)
@@ -114,9 +144,34 @@ async def get_teams(
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player),
 ):
-    result = await db.execute(select(Team).options(joinedload(Team.owner)).where(Team.id_league == league_id))
+    result = await db.execute(select(League).filter(League.id == league_id))
+    league = result.scalars().first()
+    if not league:
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    result = await db.execute(
+        select(Team).options(joinedload(Team.owner)).where(Team.id_league == league_id)
+    )
     teams = result.unique().scalars().all()
-    return teams
+
+    response = []
+    for team in teams:
+        result_matches = await db.execute(
+            select(Match).filter(
+                or_(Match.team_home_id == team.id, Match.team_away_id == team.id),
+                Match.state == MatchState.finished
+            )
+        )
+        matches_joues = len(result_matches.scalars().all())
+        response.append({
+            "id": team.id,
+            "nom": team.nom,
+            "nom_stade": team.nom_stade,
+            "owner_username": team.owner_username,
+            "journeys_remaining": league.total_journeys - matches_joues
+        })
+
+    return response
 
 @router.post("/{league_id}/join")
 async def join_league(

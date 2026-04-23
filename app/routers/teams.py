@@ -20,6 +20,7 @@ class EquipeResponse(BaseModel):
     nom: str
     nom_stade: str
     owner_username: str
+    journeys_remaining: int
 
     model_config = {"from_attributes": True}
 
@@ -33,12 +34,40 @@ async def create_team(
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player),  # ← route protégée
 ):
+    #Verifie si le joueur appartient à la ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == data.id_league,
+        )
+    )
+    player_in = result.scalars().first()
+    if not player_in:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas dans cette ligue")
+    
+
+    #Verifie si le nombre max de team est atteint
+    result = await db.execute(select(League).filter(League.id == data.id_league))
+    league = result.scalars().first()
+    result2 = await db.execute(select(Team).filter(Team.id_league == data.id_league))
+    equipes_actuelles = result2.scalars().all()
+    if len(equipes_actuelles) >= league.max_team:
+        raise HTTPException(status_code=400, detail="Le nombre maximum d'équipes est atteint")
+    
+    #Verifie si le nombre max de team pour ce joueur est atteint est atteint
+    result2 = await db.execute(select(Team).filter(Team.id_league == data.id_league, Team.id_owner == current_player.id))
+    teams_owned = result2.scalars().all()
+    if not data.is_ia:
+        if len(teams_owned) >= league.max_per_player:
+            raise HTTPException(status_code=400, detail="Le nombre maximum d'équipes que vous pouvez controler est atteint")
+
     # Vérifie si le nom de l'équipe existe déjà
     result = await db.execute(select(Team).filter(Team.nom == data.nom, Team.id_league == data.id_league))
     existing = result.scalars().first()
     if existing:
         raise HTTPException(status_code=400, detail="Ce nom d'équipe est déjà pris")
 
+    
     # Détermine le propriétaire
     if data.is_ia:
         # Vérifie que le joueur est manager de cette ligue
@@ -61,7 +90,7 @@ async def create_team(
         nom=data.nom,
         nom_stade = data.nom_stade,
         id_league = data.id_league,
-        id_owner = current_player.id)
+        id_owner=owner_id)
     db.add(equipe)
     await db.commit()
     await db.refresh(equipe)  # ← on a besoin de equipe.id pour plus tard
@@ -69,7 +98,8 @@ async def create_team(
         "id": equipe.id,
         "nom": equipe.nom,
         "nom_stade": equipe.nom_stade,
-        "owner_username": "AI" if data.is_ia else current_player.username
+        "owner_username": "AI" if data.is_ia else current_player.username,
+        "journey_remaining" : 0
         }
 
 @router.post("/{team_id}/claim")
