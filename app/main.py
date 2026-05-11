@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import players, auth, leagues, teams
+from app.routers import players, auth, leagues, teams, matches
 from contextlib import asynccontextmanager
 from app.database.connection import get_db
 from app.models.player import Player, PlayerTypeEnum
@@ -35,6 +35,7 @@ app.include_router(players.router)
 app.include_router(auth.router)
 app.include_router(leagues.router)
 app.include_router(teams.router)
+app.include_router(matches.router)
 
 
 @app.get("/")
