@@ -4,7 +4,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
 from app.database.connection import get_db
-from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum
+from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum, SportTypeEnum
 from app.models.team import Team
 from app.core.dependencies import get_current_player
 from app.models.match import Match
@@ -233,3 +233,150 @@ async def leave_league(
     await db.commit()
 
     return {"message": "Tu as quitté la ligue"}
+
+@router.get("/{league_id}/calendar")
+async def show_calendar(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    # Vérifie que la ligue existe
+    result = await db.execute(select(League).filter(League.id == league_id))
+    league = result.scalars().first()
+    if not league:
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    # Vérifie que le joueur est dans la ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league_id,
+        )
+    )
+    player_league = result.scalars().first()
+    if not player_league:
+        raise HTTPException(status_code=404, detail="Tu n'es pas dans cette ligue")
+
+    result = await db.execute(
+        select(Match).options(joinedload(Match.team_home), joinedload(Match.team_away)).filter(Match.league_id == league_id)
+    )
+    matches = result.scalars().all()
+    matches = [
+            {
+                "id": match.id,
+                "team_home": match.team_home.nom,
+                "team_away": match.team_away.nom,
+                "score_home": match.score_home,
+                "score_away": match.score_away,
+                "state": match.state,
+                "scheduled_at": match.scheduled_at,
+                "stadium": match.team_home.nom_stade,
+                "round_number": match.round_number
+            }
+            for match in matches]
+
+    return matches
+
+@router.get("/{league_id}/standings")
+async def show_standings(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    # Vérifie que la ligue existe
+    result = await db.execute(select(League).filter(League.id == league_id))
+    league = result.scalars().first()
+    if not league:
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    # Vérifie que le joueur est dans la ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league_id,
+        )
+    )
+    player_league = result.scalars().first()
+    if not player_league:
+        raise HTTPException(status_code=404, detail="Tu n'es pas dans cette ligue")
+
+    result = await db.execute(
+        select(Team).options(joinedload(Team.owner)).where(Team.id_league == league_id)
+    )
+    teams = result.unique().scalars().all()
+
+    if league.sport_type == SportTypeEnum.football:
+        standings = []
+        for team in teams:
+            result_matches = await db.execute(
+                select(Match).filter(
+                    or_(Match.team_home_id == team.id, Match.team_away_id == team.id),
+                    Match.state == MatchState.finished
+                )
+            )
+            matches_joues = result_matches.scalars().all()
+            points = 0
+            goals_for = 0
+            goals_against = 0
+            for match in matches_joues:
+                if match.team_home_id == team.id:
+                    if match.score_home > match.score_away:
+                        points += 3
+                    elif match.score_home == match.score_away:
+                        points += 1
+                else:
+                    if match.score_away > match.score_home:
+                        points += 3
+                    elif match.score_away == match.score_home:
+                        points += 1
+                goals_for += match.score_home if match.team_home_id == team.id else match.score_away
+                goals_against += match.score_away if match.team_home_id == team.id else match.score_home
+
+            standings.append({
+                "team": team.nom,
+                "owner": team.owner_username,
+                "points": points,
+                "matches_played": len(matches_joues),
+                "goals_for": goals_for,
+                "goals_against": goals_against
+            })
+
+        standings.sort(key=lambda x: (x["points"], x["goals_for"] - x["goals_against"]), reverse=True)
+
+    else : # basketball
+        standings = []
+        for team in teams:
+            result_matches = await db.execute(
+                select(Match).filter(
+                    or_(Match.team_home_id == team.id, Match.team_away_id == team.id),
+                    Match.state == MatchState.finished
+                )
+            )
+            matches_joues = result_matches.scalars().all()
+            wins = 0
+            losses = 0
+            points_for = 0
+            points_against = 0
+            for match in matches_joues:
+                if match.team_home_id == team.id and match.score_home > match.score_away:
+                    wins += 1
+                elif match.team_away_id == team.id and match.score_away > match.score_home:
+                    wins += 1
+                else:
+                    losses += 1
+                points_for += match.score_home if match.team_home_id == team.id else match.score_away
+                points_against += match.score_away if match.team_home_id == team.id else match.score_home
+
+            standings.append({
+                "team": team.nom,
+                "owner": team.owner_username,
+                "wins": wins,
+                "losses": losses,
+                "points_for": points_for,
+                "points_against": points_against,
+                "matches_played": len(matches_joues)
+            })
+
+        standings.sort(key=lambda x: (x["wins"], x["points_for"] - x["points_against"]), reverse=True)
+
+    return standings

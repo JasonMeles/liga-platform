@@ -10,6 +10,10 @@ class PlayerTypeEnum(str, enum.Enum):
     humain = "humain"
     ia = "ia"
 
+class SportTypeEnum(str, enum.Enum):
+    football = "football"
+    basketball = "basketball"
+
 class Player(Base):
     __tablename__ = "players"
 
@@ -45,6 +49,7 @@ class League(Base):
     max_per_player = Column(Integer, nullable=False)
     is_active = Column(Boolean, default = False, server_default="false", nullable = False )
     total_journeys = Column(Integer, nullable=False)
+    sport_type = Column(Enum(SportTypeEnum), nullable=False, default=SportTypeEnum.football)
     player_leagues = relationship("PlayerLeague")
     @property 
     def manager_username(self) -> str: 
