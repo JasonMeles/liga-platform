@@ -6,6 +6,7 @@ from app.models.match import Match, MatchState
 from app.models.team import Team
 from app.models.player import Player, PlayerLeague, LeagueRoleEnum, PlayerTypeEnum
 from app.core.dependencies import get_current_player
+from app.models.feed_item import MessageTypeEnum, FeedItem
 
 router = APIRouter(prefix="/matches", tags=["matches"])
 
@@ -92,7 +93,20 @@ async def finish_match(
         raise HTTPException(status_code=400, detail="Vous n'êtes pas manager de la ligue")
     if current_player.id != team_away.id_owner and current_player.id != team_home.id_owner:
         raise HTTPException(status_code=400, detail="Vous ne controlez aucune de ces équipes")
+    if match.score_home is None or match.score_away is None:
+        raise HTTPException(status_code=400, detail="Le score doit être défini pour terminer le match")
     match.state = MatchState.finished
+    
+    #créer le feed item
+    feed_item = FeedItem(
+        type=MessageTypeEnum.match_event,
+        match_id=match_id,
+        match = match,
+        league_id=match.league_id
+    )
+
+    db.add(feed_item)
     await db.commit()
     await db.refresh(match)
+    await db.refresh(feed_item)
     return {"message": "Le match est terminé"}

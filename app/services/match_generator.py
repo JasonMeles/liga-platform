@@ -12,7 +12,8 @@ def generate_matches(equipes: list, total_journeys: int) -> list[Match]:
                 team_home_id=equipes[j].id,
                 team_away_id=equipes[N - 1 - j].id,
                 league_id=equipes[0].id_league,
-                state=MatchState.pending
+                state=MatchState.pending,
+                round_number=i + 1
             )
             matchs.append(match)
 

@@ -11,6 +11,7 @@ from app.database.connection import Base
 from app.models.player import Player
 from app.models.team import Team 
 from app.models.match import Match
+from app.models.feed_item import FeedItem
 
 load_dotenv()
 
