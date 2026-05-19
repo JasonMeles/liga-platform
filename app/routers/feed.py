@@ -10,6 +10,7 @@ from app.models.match import Match
 from app.core.dependencies import get_current_player
 from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
+from app.services.connection_manager import manager
 
 router = APIRouter(prefix="/feed", tags=["Feed"])
 
@@ -53,6 +54,7 @@ async def create_feed_item(
     db.add(feed_item)
     await db.commit()
     await db.refresh(feed_item)
+    await manager.broadcast(feed_item.league_id, feed_item.content)
     return feed_item
 
 @router.get("/league/{league_id}")
