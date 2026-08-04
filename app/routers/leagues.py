@@ -79,7 +79,8 @@ async def create_league(
     "id": league.id,
     "name": league.name,
     "manager_username": current_player.username,
-    "is_active": league.is_active
+    "is_active": league.is_active,
+    "total_journeys": league.total_journeys
     }
 
 
