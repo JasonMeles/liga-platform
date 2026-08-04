@@ -11,16 +11,7 @@ router = APIRouter(
     tags=["players"]
 )
 
-@router.post("/", response_model=PlayerResponse)
-async def create_player(player: PlayerCreate, db: AsyncSession = Depends(get_db)):
-    db_player = Player(
-        username=player.username,
-        email=player.email
-    )
-    db.add(db_player)
-    await db.commit()
-    await db.refresh(db_player)
-    return db_player
+
 
 @router.get("/", response_model=list[PlayerResponse])
 async def get_players(db: AsyncSession = Depends(get_db)):
