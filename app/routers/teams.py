@@ -99,7 +99,7 @@ async def create_team(
         "nom": equipe.nom,
         "nom_stade": equipe.nom_stade,
         "owner_username": "AI" if data.is_ia else current_player.username,
-        "journey_remaining" : 0
+        "journeys_remaining" : 0
         }
 
 @router.post("/{team_id}/claim")
