@@ -41,7 +41,7 @@ async def db_session():
 
 
 @pytest_asyncio.fixture
-async def client(db_session):
+async def client(db_session, monkeypatch):
     # On remplace get_db par une version qui utilise la session de test
     async def override_get_db():
         yield db_session
@@ -49,8 +49,10 @@ async def client(db_session):
     app.dependency_overrides[get_db] = override_get_db
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    monkeypatch.setattr("app.main.get_db", override_get_db)
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
 
     app.dependency_overrides.clear()
 
