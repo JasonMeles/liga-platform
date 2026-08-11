@@ -175,7 +175,7 @@ async def modify_team(team_id: int, data: EquipeUpdate, db: AsyncSession = Depen
     if equipe is None:
         raise HTTPException(status_code=404, detail="Equipe introuvable")
     if equipe.id_owner != current_player.id:
-        raise HTTPException(status_code=403, detail="N'est le propriétaire de l'équipe")
+        raise HTTPException(status_code=403, detail="N'est pas le propriétaire de l'équipe")
     equipe.nom_stade = data.nom_stade
     await db.commit()
     await db.refresh(equipe)

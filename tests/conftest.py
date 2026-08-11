@@ -79,3 +79,25 @@ async def auth_headers(client):
     auth_header = {"Authorization": f"Bearer {access_token}"}
     yield auth_header
 
+
+@pytest_asyncio.fixture
+async def auth_headers_2(client):
+    # Arrange
+    player_data = {
+        "username": "TestPlayer2",
+        "email": "testplayer2@example.com",
+        "password": "SuperMotDePasse1234"
+    }
+
+    # Act
+    response1 = await client.post("/auth/register", json=player_data)
+
+    # Act — on tente de se connecter avec les mêmes identifiants
+    login_data = {
+        "username": "TestPlayer2",
+        "password": "SuperMotDePasse1234"
+    }
+    response2 = await client.post("/auth/login", data=login_data)
+    access_token = response2.json()["access_token"] 
+    auth_header = {"Authorization": f"Bearer {access_token}"}
+    yield auth_header
