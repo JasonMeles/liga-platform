@@ -101,3 +101,31 @@ async def auth_headers_2(client):
     access_token = response2.json()["access_token"] 
     auth_header = {"Authorization": f"Bearer {access_token}"}
     yield auth_header
+
+
+@pytest_asyncio.fixture
+async def match_setup(client, auth_headers, auth_headers_2, db_session):
+    # Arrange
+    league_data = {
+        "name": "Test League",
+        "max_teams": 2,
+        "max_per_player": 1,
+        "total_journeys": 2
+    }   
+
+    # Act
+    response5 = await client.post("/leagues/", json=league_data, headers=auth_headers)
+    response6 = await client.post(f"/leagues/{response5.json()['id']}/join", json={}, headers=auth_headers_2)
+    response7 = await client.post(f"/teams/", json={"nom": "Team 1", "nom_stade": "Stadium 1", "id_league": response5.json()['id'], "is_ia": False}, headers=auth_headers)
+    response8 = await client.post(f"/teams/", json={"nom": "Team 2", "nom_stade": "Stadium 2", "id_league": response5.json()['id'], "is_ia": False}, headers=auth_headers_2)
+    response9 = await client.post(f"/leagues/{response5.json()['id']}/validate", json={}, headers=auth_headers)
+    response10 = await client.get(f"/leagues/{response5.json()['id']}/calendar", headers=auth_headers)
+
+    calendar = response10.json()
+    yield {
+        "league_id": response5.json()['id'],
+        "team1_id": response7.json()['id'],
+        "team2_id": response8.json()['id'],
+        "match_id1": calendar[0]['id'],
+        "match_id2": calendar[1]['id'],
+    }
