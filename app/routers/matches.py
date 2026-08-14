@@ -7,8 +7,13 @@ from app.models.team import Team
 from app.models.player import Player, PlayerLeague, LeagueRoleEnum, PlayerTypeEnum
 from app.core.dependencies import get_current_player
 from app.models.feed_item import MessageTypeEnum, FeedItem
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/matches", tags=["matches"])
+
+class Score(BaseModel):
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
 
 @router.put("/{match_id}/start")
 async def start_match(
@@ -38,8 +43,7 @@ async def start_match(
 @router.put("/{match_id}/score")
 async def update_score(
     match_id: int,
-    home_score: int,
-    away_score: int,
+    score: Score,
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player)
 ):
@@ -61,8 +65,8 @@ async def update_score(
     team_away = result3.scalar_one_or_none()
     if current_player.id != team_away.id_owner and current_player.id != team_home.id_owner and current_player.id != manager.player_id:
         raise HTTPException(status_code=400, detail="Vous ne controlez aucune de ces équipes et vous n'êtes pas manager de la ligue")
-    match.score_home = home_score
-    match.score_away = away_score
+    match.score_home = score.home_score
+    match.score_away = score.away_score
     await db.commit()
     await db.refresh(match)
     return {"message": "Score mis à jour"}
