@@ -1,5 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.connection_manager import manager
+import queue
 
 router = APIRouter(prefix="/ws", tags=["websockets"])
 
@@ -12,5 +13,5 @@ async def websocket_endpoint(websocket: WebSocket, league_id: int):
             # Traitez les données reçues et éventuellement envoyez une réponse
             await manager.broadcast(league_id, f"Message reçu pour la ligue {league_id}: {data}")
     except WebSocketDisconnect:
-        await manager.disconnect(league_id, websocket)
+        manager.disconnect(league_id, websocket)
         print(f"WebSocket déconnecté pour la ligue {league_id}")
