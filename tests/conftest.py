@@ -12,6 +12,8 @@ from app.database.connection import Base, get_db
 # On importe tous les modèles pour que Base les "connaisse" tous
 from app.models import feed_item, match, player, team # adapte selon tes vrais noms de fichiers
 
+from fastapi.testclient import TestClient
+
 load_dotenv()
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -23,6 +25,7 @@ TestSessionLocal = sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False
 )
+ws_test_client = TestClient(app)
 
 
 @pytest_asyncio.fixture
@@ -129,3 +132,8 @@ async def match_setup(client, auth_headers, auth_headers_2, db_session):
         "match_id1": calendar[0]['id'],
         "match_id2": calendar[1]['id'],
     }
+
+
+@pytest_asyncio.fixture
+async def ws_client(client):
+    yield ws_test_client
