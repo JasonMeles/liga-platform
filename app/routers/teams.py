@@ -6,6 +6,9 @@ from app.models.team import Team
 from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum
 from app.core.dependencies import get_current_player
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -43,6 +46,7 @@ async def create_team(
     )
     player_in = result.scalars().first()
     if not player_in:
+        logger.warning(f"{current_player.username} n'est pas dans la league {data.id_league}")
         raise HTTPException(status_code=403, detail="Vous n'êtes pas dans cette ligue")
     
 
@@ -52,6 +56,7 @@ async def create_team(
     result2 = await db.execute(select(Team).filter(Team.id_league == data.id_league))
     equipes_actuelles = result2.scalars().all()
     if len(equipes_actuelles) >= league.max_team:
+        logger.warning(f"Refusé:  nombre d'équipes max : {league.max_team}, nombre d'équipes créées : {len(equipes_actuelles)}")
         raise HTTPException(status_code=400, detail="Le nombre maximum d'équipes est atteint")
     
     #Verifie si le nombre max de team pour ce joueur est atteint est atteint
@@ -59,12 +64,14 @@ async def create_team(
     teams_owned = result2.scalars().all()
     if not data.is_ia:
         if len(teams_owned) >= league.max_per_player:
+            logger.warning(f"Refusé:  nombre d'équipes controlable max : {league.max_per_player}, nombre d'équipes déjà controlées : {len(teams_owned)}")
             raise HTTPException(status_code=400, detail="Le nombre maximum d'équipes que vous pouvez controler est atteint")
 
     # Vérifie si le nom de l'équipe existe déjà
     result = await db.execute(select(Team).filter(Team.nom == data.nom, Team.id_league == data.id_league))
     existing = result.scalars().first()
     if existing:
+        logger.warning(f"le nom d'equipe {data.nom} existe déjà dans cette ligue")
         raise HTTPException(status_code=400, detail="Ce nom d'équipe est déjà pris")
 
     
@@ -79,6 +86,7 @@ async def create_team(
             )
         )
         if not result_membership.scalars().first():
+            logger.warning(f"{current_player.username} n'est pas manager")
             raise HTTPException(status_code=403, detail="Seul le manager peut créer une équipe IA")
         result_ai = await db.execute(select(Player).filter(Player.username == "AI"))
         owner_id = result_ai.scalars().first().id
@@ -94,6 +102,7 @@ async def create_team(
     db.add(equipe)
     await db.commit()
     await db.refresh(equipe)  # ← on a besoin de equipe.id pour plus tard
+    logger.info(f"equipe {data.nom} créée par {current_player.username}")
     return {
         "id": equipe.id,
         "nom": equipe.nom,
@@ -108,12 +117,14 @@ async def assign_team(team_id: int, db: AsyncSession = Depends(get_db), current_
     result = await db.execute(select(Team).where(Team.id == team_id))
     equipe = result.scalar_one_or_none()
     if equipe is None:
+        logger.warning(f"equipe {team_id} introuvable")
         raise HTTPException(status_code=404, detail="Equipe introuvable")
 
     # 2. Vérifie que l'équipe est bien contrôlée par l'IA
     result_ai = await db.execute(select(Player).filter(Player.username == "AI"))
     ai = result_ai.scalars().first()
     if equipe.id_owner != ai.id:
+        logger.warning(f"{equipe.nom} n'est pas controlé par l'ia, propriétaire: {equipe.owner_username} ")
         raise HTTPException(status_code=403, detail="Cette équipe n'est pas une équipe IA")
 
     # 3. Vérifie que le joueur est membre de la ligue
@@ -125,6 +136,7 @@ async def assign_team(team_id: int, db: AsyncSession = Depends(get_db), current_
     )
     membership = result_membership.scalars().first()
     if not membership:
+        logger.warning(f"{current_player.username} n'est pas dans la league {equipe.id_league}")
         raise HTTPException(status_code=403, detail="Tu ne fais pas partie de cette ligue")
 
     # 4. Vérifie le max d'équipes autorisées
@@ -139,12 +151,14 @@ async def assign_team(team_id: int, db: AsyncSession = Depends(get_db), current_
     )
     teams_owned = result_count.scalars().all()
     if len(teams_owned) >= league.max_per_player:
+        logger.warning(f"Refusé:  nombre d'équipes controlable max : {league.max_per_player}, nombre d'équipes déjà controlées : {len(teams_owned)}")
         raise HTTPException(status_code=403, detail="Nombre maximum d'équipes atteint")
 
     # Revendique l'équipe
     equipe.id_owner = current_player.id
     await db.commit()
     await db.refresh(equipe)
+    logger.info(f"{current_player.username} est devenu le propriétaire de {equipe.nom}")
     return {"message": f"Equipe {equipe.nom} revendiquée avec succès"}
 
 @router.get("/{team_id}")
