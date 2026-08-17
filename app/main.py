@@ -1,9 +1,11 @@
+from app.core import logging_config
 from fastapi import FastAPI
 from app.routers import players, auth, leagues, teams, matches, feed, websockets
 from contextlib import asynccontextmanager
 from app.database.connection import get_db
 from app.models.player import Player, PlayerTypeEnum
 from sqlalchemy import select
+
 
 
 @asynccontextmanager
@@ -23,7 +25,7 @@ async def lifespan(app: FastAPI):
             await db.commit()
     yield
 
-
+logging_config.setup_logging()
 app = FastAPI(
     title="Liga Platform API",
     description="Backend pour la gestion de ligues gaming",
