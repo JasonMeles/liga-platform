@@ -12,6 +12,9 @@ from app.models.team import Team
 from app.services.match_generator import generate_matches
 from sqlalchemy import or_
 from app.models.match import Match, MatchState
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
 
@@ -54,6 +57,7 @@ async def create_league(
     result = await db.execute(select(League).filter(League.name == data.name))
     existing = result.scalars().first()
     if existing:
+        logger.warning(f"echec de la création de la ligue {data.name}: nom déjà pris")
         raise HTTPException(status_code=400, detail="Ce nom de ligue est déjà pris")
 
     # Crée la ligue
@@ -74,7 +78,7 @@ async def create_league(
     )
     db.add(player_league)
     await db.commit()
-
+    logger.info(f"Ligue créée avec succès: {league.name}")
     return {
     "id": league.id,
     "name": league.name,
@@ -137,6 +141,7 @@ async def validate_league(
     await db.commit()
     await db.refresh(league)
 
+    logger.info(f"Ligue validée avec succès: {league.name}")
     return league
 
 @router.get("/{league_id}/teams", response_model=list[EquipeResponse])
@@ -184,6 +189,7 @@ async def join_league(
     result = await db.execute(select(League).filter(League.id == league_id))
     league = result.scalars().first()
     if not league:
+        logger.warning(f"Échec de la tentative de rejoindre la ligue {league_id}: ligue introuvable")
         raise HTTPException(status_code=404, detail="Ligue introuvable")
 
     # Vérifie que le joueur n'est pas déjà dans la ligue
@@ -195,6 +201,7 @@ async def join_league(
     )
     already_in = result.scalars().first()
     if already_in:
+        logger.warning(f"Échec de la tentative de rejoindre la ligue {league_id}: joueur {current_player.username} est déjà dans la ligue")
         raise HTTPException(status_code=400, detail="Tu es déjà dans cette ligue")
 
     # Ajoute le joueur comme membre
@@ -205,7 +212,7 @@ async def join_league(
     )
     db.add(player_league)
     await db.commit()
-
+    logger.info(f"Joueur {current_player.username} a rejoint la ligue {league.name}")
     return {"message": f"Tu as rejoint la ligue {league.name}"}
 
 
@@ -224,15 +231,17 @@ async def leave_league(
     )
     player_league = result.scalars().first()
     if not player_league:
+        logger.warning(f"Échec de la tentative de quitter la ligue {league_id}: joueur {current_player.username} non présent dans la ligue")
         raise HTTPException(status_code=404, detail="Tu n'es pas dans cette ligue")
 
     # Un manager ne peut pas quitter sa propre ligue
     if player_league.role == LeagueRoleEnum.manager:
+        logger.warning(f"Échec de la tentative de quitter la ligue {league_id}: joueur {current_player.username} est manager")
         raise HTTPException(status_code=400, detail="Un manager ne peut pas quitter sa ligue")
 
     await db.delete(player_league)
     await db.commit()
-
+    logger.info(f"Joueur {current_player.username} a quitté la ligue {league_id}")
     return {"message": "Tu as quitté la ligue"}
 
 @router.get("/{league_id}/calendar")
@@ -245,6 +254,7 @@ async def show_calendar(
     result = await db.execute(select(League).filter(League.id == league_id))
     league = result.scalars().first()
     if not league:
+        logger.warning(f"Échec de la tentative d'affichage du calendrier: ligue {league_id} introuvable")
         raise HTTPException(status_code=404, detail="Ligue introuvable")
 
     # Vérifie que le joueur est dans la ligue
@@ -256,6 +266,7 @@ async def show_calendar(
     )
     player_league = result.scalars().first()
     if not player_league:
+        logger.warning(f"Échec de la tentative d'affichage du calendrier: joueur {current_player.username} non présent dans la ligue {league_id}")
         raise HTTPException(status_code=404, detail="Tu n'es pas dans cette ligue")
 
     result = await db.execute(
@@ -288,6 +299,7 @@ async def show_standings(
     result = await db.execute(select(League).filter(League.id == league_id))
     league = result.scalars().first()
     if not league:
+        logger.warning(f"Échec de la tentative d'affichage du classement: ligue {league_id} introuvable")
         raise HTTPException(status_code=404, detail="Ligue introuvable")
 
     # Vérifie que le joueur est dans la ligue
@@ -299,6 +311,7 @@ async def show_standings(
     )
     player_league = result.scalars().first()
     if not player_league:
+        logger.warning(f"Échec de la tentative d'affichage du classement: joueur {current_player.username} non présent dans la ligue {league_id}")
         raise HTTPException(status_code=404, detail="Tu n'es pas dans cette ligue")
 
     result = await db.execute(
