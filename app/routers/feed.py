@@ -11,7 +11,9 @@ from app.core.dependencies import get_current_player
 from pydantic import BaseModel
 from sqlalchemy.orm import joinedload
 from app.services.connection_manager import manager
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/feed", tags=["Feed"])
 
 @router.post("/")
@@ -27,18 +29,21 @@ async def create_feed_item(
         result = await db.execute(select(Match).where(Match.id == feed_item.match_id))
         match_official = result.scalar_one_or_none()
         if match_official is None:
+            logger.warning(f"Match introuvable: {feed_item.match_id}")
             raise HTTPException(status_code=404, detail="Match introuvable")
         league_id = match_official.league_id
         # Vérifier que le joueur appartient à la ligue du match
         result = await db.execute(select(PlayerLeague).filter(PlayerLeague.player_id == current_player.id, PlayerLeague.league_id == league_id))
         player = result.scalar_one_or_none()
         if player is None:
+            logger.warning(f"Joueur {current_player.username} n'appartient pas à la ligue du match {feed_item.match_id}")
             raise HTTPException(status_code=404, detail="Joueur introuvable")
     
     # vérifier que le joueur appartient à la ligue
     result = await db.execute(select(PlayerLeague).filter(PlayerLeague.player_id == current_player.id, PlayerLeague.league_id == feed_item.league_id))
     player = result.scalar_one_or_none()
     if player is None:
+        logger.warning(f"Joueur {current_player.username} n'appartient pas à la ligue {feed_item.league_id}")
         raise HTTPException(status_code=404, detail="Joueur introuvable")   
 
     #créer le feed item

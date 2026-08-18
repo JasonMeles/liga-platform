@@ -112,14 +112,17 @@ async def validate_league(
     )
     manager = result.scalars().first()
     if not manager:
+        logger.warning(f"Échec de la tentative de validation de la ligue {league_id}: joueur {current_player.username} n'est pas manager")
         raise HTTPException(status_code=403, detail="Vous n'êtes pas manager de cette ligue")
 
     # 2. Récupère la ligue
     result = await db.execute(select(League).filter(League.id == league_id))
     league = result.scalars().first()
     if not league:
+        logger.warning(f"Échec de la tentative de validation de la ligue {league_id}: ligue introuvable")
         raise HTTPException(status_code=404, detail="Ligue introuvable")
     if league.is_active:
+        logger.warning(f"Échec de la tentative de validation de la ligue {league_id}: ligue déjà validée")
         raise HTTPException(status_code=400, detail="Cette ligue est déjà validée")
     
         # 3. Récupère les équipes de la ligue
@@ -129,6 +132,7 @@ async def validate_league(
     equipes = result.scalars().all()
 
     if len(equipes) < 2:
+        logger.warning(f"Échec de la tentative de validation de la ligue {league_id}: la ligue doit avoir au moins 2 équipes")
         raise HTTPException(status_code=400, detail="La ligue doit avoir au moins 2 équipes")
 
     # 4. Génère les matchs
