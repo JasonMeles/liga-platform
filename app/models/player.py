@@ -49,7 +49,7 @@ class League(Base):
     is_active = Column(Boolean, default = False, server_default="false", nullable = False )
     total_journeys = Column(Integer, nullable=False)
     sport_type = Column(Enum(SportTypeEnum), nullable=False, default=SportTypeEnum.football)
-    player_leagues = relationship("PlayerLeague")
+    player_leagues = relationship("PlayerLeague", passive_deletes=True)
     @property 
     def manager_username(self) -> str: 
         for i in self.player_leagues:

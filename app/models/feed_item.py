@@ -19,5 +19,5 @@ class FeedItem(Base):
     player_id = Column(Integer, ForeignKey("players.id", ondelete="CASCADE"), nullable=True)
     match_id = Column(Integer, ForeignKey("match.id", ondelete="CASCADE"), nullable=True)
     league_id = Column(Integer, ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False)
-    player = relationship("Player", foreign_keys=[player_id])
-    match = relationship("Match", foreign_keys=[match_id])
+    player = relationship("Player", foreign_keys=[player_id], passive_deletes=True)
+    match = relationship("Match", foreign_keys=[match_id], passive_deletes=True)
