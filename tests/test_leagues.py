@@ -1,6 +1,10 @@
 import pytest
 from sqlalchemy import select
-from app.models.player import PlayerLeague, LeagueRoleEnum
+from app.models.player import Player, PlayerLeague, LeagueRoleEnum, League, PlayerLeague
+from app.models.team import Team
+from app.models.match import Match
+from app.models.feed_item import FeedItem
+from tests.conftest import auth_headers_2
 
 @pytest.mark.asyncio
 async def test_create_league(client, auth_headers, db_session):
@@ -119,3 +123,46 @@ async def test_validate_league_already_validated(client, auth_headers):
     assert response3.status_code == 400
     data = response3.json()
     assert data["detail"] == "Cette ligue est déjà validée"
+
+
+@pytest.mark.asyncio
+async def test_delete_league(client, auth_headers, db_session, match_setup):
+
+    # Act
+    response = await client.post(f"/feed/", json={"league_id": match_setup['league_id'], "content": "Test message"}, headers=auth_headers)
+    response2 = await client.delete(f"/leagues/{match_setup['league_id']}/delete", headers=auth_headers)
+    response_data = await db_session.execute(select(PlayerLeague).where(PlayerLeague.league_id == match_setup['league_id']))
+    playerleague = response_data.scalar_one_or_none()
+    response_data2 = await db_session.execute(select(Team).where(Team.id_league == match_setup['league_id']))
+    teams = response_data2.scalars().all()
+    response_data3 = await db_session.execute(select(Match).where(Match.league_id == match_setup['league_id']))
+    matches = response_data3.scalars().all()
+    response_data4 = await db_session.execute(select(League).where(League.id == match_setup['league_id']))
+    league = response_data4.scalar_one_or_none()
+    response_data5 = await db_session.execute(select(FeedItem).where(FeedItem.league_id == match_setup['league_id']))
+    feed_items = response_data5.scalars().all()
+
+
+    # Assert
+    assert response.status_code == 200
+    assert response2.status_code == 200
+    assert len(feed_items) == 0
+    assert league is None
+    assert len(matches) == 0
+    assert len(teams) == 0
+    assert playerleague is None
+
+@pytest.mark.asyncio
+async def test_leave_league_transfer_teams_to_ai(client, auth_headers_2, match_setup, db_session):
+    # Arrange
+    
+
+    # Act
+    response5 = await client.delete(f"/leagues/{match_setup['league_id']}/leave", headers=auth_headers_2)
+    response_teamq = await db_session.execute(select(Team).filter(Team.id == match_setup['team2_id']))
+    team2 = response_teamq.scalars().first()
+    response_ai = await db_session.execute(select(Player).filter(Player.username == "AI"))
+    ai_player = response_ai.scalars().first()
+
+    assert response5.status_code == 200
+    assert team2.id_owner ==  ai_player.id 
