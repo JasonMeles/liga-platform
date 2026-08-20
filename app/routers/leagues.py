@@ -243,6 +243,14 @@ async def leave_league(
         logger.warning(f"Échec de la tentative de quitter la ligue {league_id}: joueur {current_player.username} est manager")
         raise HTTPException(status_code=400, detail="Un manager ne peut pas quitter sa ligue")
 
+    result2 = await db.execute(select(Player).filter(Player.username == "AI"))
+    ia = result2.scalars().first()
+    result3 = await db.execute(select(Team).filter(Team.id_league == league_id, Team.id_owner == current_player.id))
+    teams = result3.scalars().all()
+    for team in teams:
+        team.id_owner = ia.id
+    logger.info(f"{len(teams)} équipes appartenant à {current_player.username} dans la ligue {league_id} ont été transférées à l'IA")
+
     await db.delete(player_league)
     await db.commit()
     logger.info(f"Joueur {current_player.username} a quitté la ligue {league_id}")
@@ -398,3 +406,31 @@ async def show_standings(
         standings.sort(key=lambda x: (x["wins"], x["points_for"] - x["points_against"]), reverse=True)
 
     return standings
+
+
+@router.delete("/{league_id}/delete")
+async def delete_league(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player)
+):
+    league = await db.execute(select(League).filter(League.id == league_id))
+    league = league.scalar_one_or_none()
+    if not league:
+        logger.warning(f"Échec de la tentative de suppression de la ligue {league_id}: ligue introuvable")
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league_id,
+            PlayerLeague.role == LeagueRoleEnum.manager,
+        )
+    )
+    manager = result.scalars().first()
+    if not manager:
+        logger.warning(f"Échec de la tentative de suppression de la ligue {league_id}: joueur {current_player.username} n'est pas manager")
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas manager de cette ligue")
+    await db.delete(league)
+    await db.commit()
+    logger.info(f"Ligue {league_id} supprimée avec succès")
+    return {"message": "Ligue supprimée avec succès"}
