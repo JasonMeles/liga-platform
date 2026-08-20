@@ -124,7 +124,7 @@ async def assign_team(team_id: int, db: AsyncSession = Depends(get_db), current_
     result_ai = await db.execute(select(Player).filter(Player.username == "AI"))
     ai = result_ai.scalars().first()
     if equipe.id_owner != ai.id:
-        logger.warning(f"{equipe.nom} n'est pas controlé par l'ia, propriétaire: {equipe.owner_username} ")
+        logger.warning(f"{equipe.nom} n'est pas controlé par l'ia, propriétaire: {equipe.id_owner} ")
         raise HTTPException(status_code=403, detail="Cette équipe n'est pas une équipe IA")
 
     # 3. Vérifie que le joueur est membre de la ligue
