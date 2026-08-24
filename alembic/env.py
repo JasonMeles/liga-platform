@@ -13,7 +13,7 @@ from app.models.team import Team
 from app.models.match import Match
 from app.models.feed_item import FeedItem
 
-load_dotenv()
+load_dotenv(".env.local")
 
 config = context.config
 config.set_main_option("sqlalchemy.url", os.getenv("SYNC_DATABASE_URL"))

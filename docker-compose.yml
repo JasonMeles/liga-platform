@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: liga_postgres
+    environment:
+      POSTGRES_USER: liga_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: liga_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  api:
+    build: .
+    container_name: liga_api
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:

@@ -10,7 +10,7 @@ wheels/
 .venv
 
 #Secrets
-.env
+.env*
 
 #Tests
 .pytest_cache/

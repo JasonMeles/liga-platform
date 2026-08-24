@@ -14,7 +14,7 @@ from app.models import feed_item, match, player, team # adapte selon tes vrais n
 
 from fastapi.testclient import TestClient
 
-load_dotenv()
+load_dotenv(".env.local")
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 
