@@ -3,10 +3,12 @@ import secrets
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import bcrypt
+import os 
 
-SECRET_KEY = "change-moi-en-prod"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 
 def hash_password(password: str) -> str:
@@ -30,7 +32,7 @@ def decode_access_token(token: str) -> dict | None:
     except JWTError:
         return None
 
-REFRESH_TOKEN_EXPIRE_DAYS = 30  # Durée de vie du refresh token
+
 
 def create_refresh_token() -> tuple[str, datetime]:
     # Génère une chaîne aléatoire de 32 octets, encodée en base64 URL-safe
