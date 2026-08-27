@@ -22,6 +22,7 @@ class Player(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     hashed_password = Column(String, nullable=False)
     player_type = Column(Enum(PlayerTypeEnum), nullable=False, default=PlayerTypeEnum.humain)
+    player_leagues = relationship("PlayerLeague", passive_deletes=True)
 
 
 class RefreshToken(Base):
@@ -47,6 +48,7 @@ class League(Base):
     max_team = Column(Integer, nullable=False)
     max_per_player = Column(Integer, nullable=False)
     is_active = Column(Boolean, default = False, server_default="false", nullable = False )
+    allow_same_owner_matches = Column(Boolean, default = True, server_default="true", nullable = False )
     total_journeys = Column(Integer, nullable=False)
     sport_type = Column(Enum(SportTypeEnum), nullable=False, default=SportTypeEnum.football)
     player_leagues = relationship("PlayerLeague", passive_deletes=True)
@@ -66,3 +68,8 @@ class PlayerLeague(Base):
     role      = Column(Enum(LeagueRoleEnum), nullable=False, default=LeagueRoleEnum.membre)
     joined_at = Column(DateTime(timezone=True), server_default=func.now())
     player = relationship("Player")
+    league = relationship("League")
+    @property
+    def name(self) -> str:
+        return self.league.name
+    
