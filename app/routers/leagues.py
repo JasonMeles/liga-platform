@@ -24,6 +24,8 @@ class LeagueCreate(BaseModel):
     max_teams: int
     max_per_player: int
     total_journeys: int
+    sport_type: SportTypeEnum
+    allow_same_owner_matches: bool = True
 
 
 class LeagueResponse(BaseModel):
@@ -32,6 +34,8 @@ class LeagueResponse(BaseModel):
     manager_username: str
     is_active : bool
     total_journeys : int
+    sport_type: SportTypeEnum
+    allow_same_owner_matches: bool 
 
     model_config = {"from_attributes": True}
 
@@ -65,7 +69,10 @@ async def create_league(
         name=data.name,
         max_team=data.max_teams,
         max_per_player=data.max_per_player,
-        total_journeys=data.total_journeys)
+        total_journeys=data.total_journeys,
+        sport_type=data.sport_type,
+        allow_same_owner_matches=data.allow_same_owner_matches
+    )
     db.add(league)
     await db.commit()
     await db.refresh(league)  # ← on a besoin de league.id pour l'étape suivante
@@ -84,7 +91,9 @@ async def create_league(
     "name": league.name,
     "manager_username": current_player.username,
     "is_active": league.is_active,
-    "total_journeys": league.total_journeys
+    "total_journeys": league.total_journeys,
+    "sport_type": league.sport_type,
+    "allow_same_owner_matches": league.allow_same_owner_matches
     }
 
 
@@ -127,16 +136,16 @@ async def validate_league(
     
         # 3. Récupère les équipes de la ligue
     result = await db.execute(
-        select(Team).filter(Team.id_league == league_id)
+        select(Team).options(joinedload(Team.owner)).filter(Team.id_league == league_id)
     )
-    equipes = result.scalars().all()
+    equipes = result.unique().scalars().all()
 
     if len(equipes) < 2:
         logger.warning(f"Échec de la tentative de validation de la ligue {league_id}: la ligue doit avoir au moins 2 équipes")
         raise HTTPException(status_code=400, detail="La ligue doit avoir au moins 2 équipes")
 
     # 4. Génère les matchs
-    matchs = generate_matches(list(equipes), league.total_journeys)
+    matchs = generate_matches(list(equipes), league.total_journeys, allow_same_owner_matches=league.allow_same_owner_matches)
     for match in matchs:
         db.add(match)
 
