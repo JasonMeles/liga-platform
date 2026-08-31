@@ -114,7 +114,8 @@ async def match_setup(client, auth_headers, auth_headers_2, db_session):
         "name": "Test League",
         "max_teams": 2,
         "max_per_player": 1,
-        "total_journeys": 2
+        "total_journeys": 2,
+        "sport_type":"football"
     }   
 
     # Act

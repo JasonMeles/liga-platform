@@ -13,7 +13,8 @@ async def test_create_league(client, auth_headers, db_session):
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     # Act
@@ -39,7 +40,8 @@ async def test_create_duplicate_league(client, auth_headers):
         "name": "Duplicate League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     # Act
@@ -59,7 +61,9 @@ async def test_create_league_unauthorized(client):
         "name": "Duplicate League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5}
+        "total_journeys": 5,
+        "sport_type": "football"
+        }
 
     # Act
     response = await client.post("/leagues/", json=league_data)  # pas de headers
@@ -74,7 +78,8 @@ async def test_validate_league_not_enough_teams(client, auth_headers):
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     # Act
@@ -105,7 +110,8 @@ async def test_validate_league_already_validated(client, auth_headers):
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     # Act

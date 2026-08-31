@@ -120,7 +120,8 @@ async def test_score_by_manager(client, auth_headers, auth_headers_2, db_session
         "name": "Test League",
         "max_teams": 2,
         "max_per_player": 1,
-        "total_journeys": 2
+        "total_journeys": 2,
+        "sport_type": "football"
     }   
 
     response5 = await client.post("/leagues/", json=league_data, headers=auth_headers)

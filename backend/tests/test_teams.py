@@ -10,7 +10,8 @@ async def test_claim_team(client, auth_headers, auth_headers_2, db_session):
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     team1_data = {
@@ -48,7 +49,8 @@ async def test_claim_team_max_per_player(client, auth_headers, auth_headers_2, d
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 1,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     team1_data = {
@@ -86,7 +88,8 @@ async def test_claim_team_not_in_league(client, auth_headers, auth_headers_2, db
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     team1_data = {
@@ -115,7 +118,8 @@ async def test_claim_team_already_taken(client, auth_headers, auth_headers_2, db
         "name": "Test League",
         "max_teams": 10,
         "max_per_player": 2,
-        "total_journeys": 5
+        "total_journeys": 5,
+        "sport_type": "football"
     }
 
     team1_data = {

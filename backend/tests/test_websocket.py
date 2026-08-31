@@ -15,7 +15,8 @@ async def test_websocket_isolation_between_leagues(ws_client, match_setup, auth_
         "name": "Test League 2",
         "max_teams": 2,
         "max_per_player": 1,
-        "total_journeys": 2
+        "total_journeys": 2,
+        "sport_type": "football"
     }
     response = await client.post("/leagues/", json=league_data, headers=auth_headers)
     league_id_2 = response.json()['id']
