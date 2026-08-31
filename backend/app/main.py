@@ -9,7 +9,7 @@ from sqlalchemy import select
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import logging
-
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +35,14 @@ app = FastAPI(
     description="Backend pour la gestion de ligues gaming",
     version="0.1.0",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 logger = logging.getLogger(__name__)
