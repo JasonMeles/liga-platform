@@ -1,3 +1,4 @@
+from app.models import feed_item, match, player
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -10,7 +11,7 @@ from app.main import app
 
 from app.database.connection import Base, get_db
 # On importe tous les modèles pour que Base les "connaisse" tous
-from app.models import feed_item, match, player, team # adapte selon tes vrais noms de fichiers
+from app.models import team # adapte selon tes vrais noms de fichiers
 
 from fastapi.testclient import TestClient
 

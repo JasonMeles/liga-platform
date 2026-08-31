@@ -1,6 +1,7 @@
 from app.core import logging_config
+from app.routers import auth, feed, leagues, matches, players, teams
 from fastapi import FastAPI
-from app.routers import players, auth, leagues, teams, matches, feed, websockets
+from app.routers import websockets
 from contextlib import asynccontextmanager
 from app.database.connection import get_db
 from app.models.player import Player, PlayerTypeEnum
