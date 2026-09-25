@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database.connection import get_db
 from app.models.player import Player, PlayerLeague
-from app.schemas.player import PlayerCreate, PlayerResponse, PlayerMe
+from app.schemas.player import PlayerResponse, PlayerMe
 from app.core.dependencies import get_current_player
 from sqlalchemy.orm import joinedload
 

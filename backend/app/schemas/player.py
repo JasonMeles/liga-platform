@@ -2,9 +2,6 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from app.models.player import LeagueRoleEnum
 
-class PlayerCreate(BaseModel):
-    username: str
-    email: EmailStr
 
 class LeagueMembershipPublic(BaseModel):
     name: str
