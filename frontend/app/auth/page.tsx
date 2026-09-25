@@ -3,15 +3,6 @@ import Link from "next/link";
 export default function AuthChoice() {
   return (
     <main className="flex min-h-screen flex-col sm:grid sm:grid-cols-2">
-      {/* Image centrale 
-      <div className="relative min-h-[280px] overflow-hidden bg-ink sm:order-2 sm:min-h-screen">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/auth.png')" }}
-        />
-        <div className="absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-ink to-transparent" />
-        <div className="absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-ink to-transparent" />
-      </div>*/}
       {/* Colonne Connexion */}
       <div className=" relative flex flex-col items-center justify-center overflow-hidden bg-ink px-8 py-12 text-center ">
         <div
