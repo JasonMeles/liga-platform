@@ -5,7 +5,7 @@ export default function Home() {
     <>
       <section
         className="relative h-[640px] bg-cover bg-[center_35%] px-6"
-        style={{ backgroundImage: "url('/stadium.png')" }}
+        style={{ backgroundImage: "url('/landing.png')" }}
       >
         <div className="hero-copy absolute left-1/2 top-[33%] w-[88%] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7">
           <h1 className="font-display text-4xl leading-[0.95] text-white sm:text-6xl">
