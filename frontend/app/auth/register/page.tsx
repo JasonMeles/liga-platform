@@ -31,7 +31,7 @@ export default function RegisterPage() {
 if (response.ok) {
   const data = await response.json();
   console.log(data); // pour l'instant, juste vérifier que ça marche
-  router.push("/dashboard");
+  router.replace("/dashboard");
 } else {
   const errorData = await response.json();
   setErrorMessage(errorData.detail);

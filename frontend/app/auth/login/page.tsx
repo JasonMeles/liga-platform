@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect  } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/AuthProvider";
 
@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
-  const { login } = useAuth();
+  const { accessToken, login } = useAuth();
   function handleChanges(e) {
   const changes = e.target.name
   const nouvelleValeur = e.target.value;
@@ -30,12 +30,24 @@ export default function LoginPage() {
   if (response.ok) {
   const data = await response.json();
   login(data.access_token, data.refresh_token);
-  router.push("/dashboard");
+  router.replace("/dashboard");
 } else {
   const errorData = await response.json();
   setErrorMessage(errorData.detail);
   console.error("Erreur lors de la connexion :", errorData.detail);
 }
+}
+
+// Déjà connecté : pas besoin du formulaire
+useEffect(() => {
+  if (accessToken) {
+    router.replace("/dashboard");
+  }
+}, [accessToken, router]);
+
+// Pas d'affichage du formulaire pendant la redirection
+if (accessToken) {
+  return null;
 }
 
 
