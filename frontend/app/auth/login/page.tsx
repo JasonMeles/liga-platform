@@ -2,12 +2,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/components/AuthProvider";
 
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [errorMessage, setErrorMessage] = useState("");
- const router = useRouter();
+  const router = useRouter();
+  const { login } = useAuth();
   function handleChanges(e) {
   const changes = e.target.name
   const nouvelleValeur = e.target.value;
@@ -25,10 +27,9 @@ export default function LoginPage() {
     },
     body: new URLSearchParams({ username: formData.username, password: formData.password }),
   });
-  console.log(formData); // pour l'instant, juste vérifier que ça marche
   if (response.ok) {
   const data = await response.json();
-  console.log(data); // pour l'instant, juste vérifier que ça marche
+  login(data.access_token, data.refresh_token);
   router.push("/dashboard");
 } else {
   const errorData = await response.json();

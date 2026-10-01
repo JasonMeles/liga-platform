@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Anton, Manrope } from "next/font/google";
 import "./globals.css";
 import SiteHeader from "./components/SiteHeader";
+import {AuthProvider} from "./components/AuthProvider";
 
 const anton = Anton({ subsets: ["latin"], weight: "400", variable: "--font-anton" });
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
@@ -15,8 +16,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="fr" className={`${anton.variable} ${manrope.variable}`}>
       <body className="min-h-screen bg-chalk font-sans text-ink antialiased">
+        <AuthProvider>
         <SiteHeader />
-        {children}
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
