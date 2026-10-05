@@ -46,6 +46,30 @@ async def test_register_duplicate_username(client):
     assert second_response.status_code == 400
 
 @pytest.mark.asyncio
+async def test_register_duplicate_username(client):
+    # Arrange
+    player_data = {
+        "username": "TestPlayer1",
+        "email": "testplayer1@example.com",
+        "password": "SuperMotDePasse123"
+    }
+
+    # Act — premier enregistrement
+    first_response = await client.post("/auth/register", json=player_data)
+
+    # Act — deuxième enregistrement avec le même email (username différent)
+    duplicate_data = {
+        "username": "TestPlayer2",
+        "email": "testplayer1@example.com",
+        "password": "AutreMotDePasse456"
+    }
+    second_response = await client.post("/auth/register", json=duplicate_data)
+
+    # Assert
+    assert first_response.status_code == 200
+    assert second_response.status_code == 400
+
+@pytest.mark.asyncio
 async def test_login_success(client):
     # Arrange — on crée d'abord un joueur via register
     register_data = {

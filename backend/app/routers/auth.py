@@ -35,11 +35,16 @@ class RefreshRequest(BaseModel):
 
 @router.post("/register", response_model=TokenResponse)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    # Vérifie si le username existe déjà
+    # Vérifie si le username et le mail existe déjà
     result = await db.execute(select(Player).filter(Player.username == data.username))
     existing = result.scalars().first()
     if existing:
         raise HTTPException(status_code=400, detail="Username déjà pris")
+
+    result = await db.execute(select(Player).filter(Player.email == data.email))
+    existing = result.scalars().first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email déjà utilisé")
 
     # Crée le joueur
     player = Player(
