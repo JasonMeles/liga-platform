@@ -7,7 +7,7 @@ type AuthContextType = {
   accessToken: string | null;   // string | null ≈ Optional[str]
   refreshToken: string | null;
   login: (access: string, refresh: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
 };
 
@@ -25,7 +25,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRefreshToken(refresh);
   }
 
-  function logout() {
+  async function logout() {
+    if (refreshToken) {
+        try {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        } catch (error) {
+        console.error("Échec de la révocation côté serveur :", error);
+        }
+    }
     setAccessToken(null);
     setRefreshToken(null);
   }
