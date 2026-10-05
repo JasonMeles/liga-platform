@@ -2,43 +2,51 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRequireAuth } from "@/app/hooks/useRequireAuth";
+import { useAuth } from "@/app/components/AuthProvider";
 
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({ username: "", email: "", password: "" });
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
+  const isGuest = useRequireAuth("guest");
+  const { login } = useAuth();
+
   function handleChanges(e) {
-  const changes = e.target.name
-  const nouvelleValeur = e.target.value;
-  const nouvelObjet = { ...formData, [changes]: nouvelleValeur };
-  
-  setFormData(nouvelObjet);
+    const changes = e.target.name;
+    const nouvelleValeur = e.target.value;
+    const nouvelObjet = { ...formData, [changes]: nouvelleValeur };
+    setFormData(nouvelObjet);
   }
 
   async function handleSubmit(e) {
-  setErrorMessage("");
-  e.preventDefault();
-  
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(formData),
-  });
-  
-if (response.ok) {
-  const data = await response.json();
-  console.log(data); // pour l'instant, juste vérifier que ça marche
-  router.replace("/dashboard");
-} else {
-  const errorData = await response.json();
-  setErrorMessage(errorData.detail);
-  console.error("Erreur lors de l'inscription :", errorData.detail);
-}
-}
+    setErrorMessage("");
+    e.preventDefault();
 
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    });
+
+    if (response.ok) {
+      // L'inscription renvoie déjà les tokens : connexion directe
+      const data = await response.json();
+      login(data.access_token, data.refresh_token);
+      router.replace("/dashboard");
+    } else {
+      const errorData = await response.json();
+      setErrorMessage(errorData.detail);
+      console.error("Erreur lors de l'inscription :", errorData.detail);
+    }
+  }
+
+  if (!isGuest) {
+    return null;
+  }
 
   return (
     <main className="mx-auto flex min-h-screen flex-col items-center justify-center text-center">
