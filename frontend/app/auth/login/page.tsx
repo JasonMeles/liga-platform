@@ -1,15 +1,17 @@
 "use client";
 import Link from "next/link";
-import { useState, useEffect  } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/components/AuthProvider";
+import { useRequireAuth } from "@/app/hooks/useRequireAuth";
 
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ username: "", password: "" });
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
-  const { accessToken, login } = useAuth();
+  const { login } = useAuth();
+  const isGuest = useRequireAuth("guest");
   function handleChanges(e) {
   const changes = e.target.name
   const nouvelleValeur = e.target.value;
@@ -38,15 +40,7 @@ export default function LoginPage() {
 }
 }
 
-// Déjà connecté : pas besoin du formulaire
-useEffect(() => {
-  if (accessToken) {
-    router.replace("/dashboard");
-  }
-}, [accessToken, router]);
-
-// Pas d'affichage du formulaire pendant la redirection
-if (accessToken) {
+if (!isGuest) {
   return null;
 }
 

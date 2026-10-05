@@ -1,19 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { useAuth } from "../components/AuthProvider";
+import { useRequireAuth } from "../hooks/useRequireAuth";
 
 export default function DashboardPage() {
   const { accessToken, authFetch } = useAuth();
-  const router = useRouter();
   const [username, setUsername] = useState<string | null>(null);
 
-  // Effet 1 : protection de la route
-  useEffect(() => {
-    if (!accessToken) {
-      router.replace("/auth/login");
-    }
-  }, [accessToken, router]);
+  // Utiliser le hook de protection
+  const isAuthorized = useRequireAuth("protected");
+
 
   // Effet 2 : chargement du profil, une seule fois
   useEffect(() => {
@@ -23,9 +19,9 @@ export default function DashboardPage() {
       .then((data) => setUsername(data.username));
   }, []);
 
-  if (!accessToken) {
-    return null;
-  }
+  if (!isAuthorized) {
+  return null;
+}
 
   return (
     <main className="mx-auto flex min-h-screen flex-col items-center justify-center px-6 text-center">

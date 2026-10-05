@@ -1,6 +1,12 @@
+"use client";
 import Link from "next/link";
-
+import { useRequireAuth } from "../hooks/useRequireAuth";
 export default function AuthChoice() {
+  const isGuest = useRequireAuth("guest");
+
+  if (!isGuest) {
+  return null;
+}
   return (
     <main className="flex min-h-screen flex-col sm:grid sm:grid-cols-2">
       {/* Colonne Connexion */}

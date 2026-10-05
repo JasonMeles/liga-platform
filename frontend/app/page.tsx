@@ -1,6 +1,13 @@
+"use client";
 import Link from "next/link";
+import { useRequireAuth } from "@/app/hooks/useRequireAuth";
 
 export default function Home() {
+  const isGuest = useRequireAuth("guest");
+  
+    if (!isGuest) {
+    return null;
+  }
   return (
     <>
       <section
