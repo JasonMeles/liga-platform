@@ -34,7 +34,7 @@ async def test_create_league(client, auth_headers, db_session):
     assert players.role == LeagueRoleEnum.manager
 
 @pytest.mark.asyncio
-async def test_create_duplicate_league(client, auth_headers):
+async def test_create_leagues_same_name_allowed(client, auth_headers, db_session):
     # Arrange
     league_data = {
         "name": "Duplicate League",
@@ -50,9 +50,12 @@ async def test_create_duplicate_league(client, auth_headers):
 
     # Assert
     assert response1.status_code == 200
-    assert response2.status_code == 400
-    data = response2.json()
-    assert data["detail"] == "Ce nom de ligue est déjà pris"
+    assert response2.status_code == 200
+
+    result = await db_session.execute(select(League).where(League.name == league_data["name"]))
+    leagues = result.scalars().all()
+    assert len(leagues) == 2  # Deux ligues avec le même nom sont autorisées, car le nom n'est pas unique dans la base de données.
+    assert leagues[0].invite_code != leagues[1].invite_code  # Les deux ligues ont des codes d'invitation différents dans la base de données, car le code d'invitation est unique.
 
 @pytest.mark.asyncio
 async def test_create_league_unauthorized(client):

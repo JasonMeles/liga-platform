@@ -13,6 +13,7 @@ from app.services.match_generator import generate_matches
 from sqlalchemy import or_
 from app.models.match import Match, MatchState
 import logging
+from app.services.invite_code import generer_code_unique
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +58,6 @@ async def create_league(
     db: AsyncSession = Depends(get_db),
     current_player: Player = Depends(get_current_player),  # ← route protégée
 ):
-    # Vérifie si le nom de la ligue existe déjà
-    result = await db.execute(select(League).filter(League.name == data.name))
-    existing = result.scalars().first()
-    if existing:
-        logger.warning(f"echec de la création de la ligue {data.name}: nom déjà pris")
-        raise HTTPException(status_code=400, detail="Ce nom de ligue est déjà pris")
-
     # Crée la ligue
     league = League(
         name=data.name,
@@ -71,7 +65,8 @@ async def create_league(
         max_per_player=data.max_per_player,
         total_journeys=data.total_journeys,
         sport_type=data.sport_type,
-        allow_same_owner_matches=data.allow_same_owner_matches
+        allow_same_owner_matches=data.allow_same_owner_matches,
+        invite_code=await generer_code_unique(db)
     )
     db.add(league)
     await db.commit()

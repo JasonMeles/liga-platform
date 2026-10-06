@@ -43,7 +43,7 @@ class League(Base):
     __tablename__ = "leagues"
 
     id         = Column(Integer, primary_key=True, index=True)
-    name       = Column(String, unique=True, nullable=False)
+    name       = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     max_team = Column(Integer, nullable=False)
     max_per_player = Column(Integer, nullable=False)
