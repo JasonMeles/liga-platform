@@ -57,7 +57,7 @@ async def test_start_match_unauthorized(client, match_setup):
     response1 = await client.post("/auth/register", json=player_data)
     response2 = await client.post("/auth/login", data=login_data)
     auth_headers_3 = {"Authorization": f"Bearer {response2.json()['access_token']}"}
-    response3 = await client.post(f"/leagues/{match_setup['league_id']}/join", json={}, headers=auth_headers_3)
+    response3 = await client.post(f"/leagues/join", json={"invite_code": match_setup["invite_code"]}, headers=auth_headers_3)
 
     response = await client.put(f"/matches/{match_id}/start", headers=auth_headers_3)
 
@@ -121,11 +121,11 @@ async def test_score_by_manager(client, auth_headers, auth_headers_2, db_session
         "max_teams": 2,
         "max_per_player": 1,
         "total_journeys": 2,
-        "sport_type": "football"
+        "sport_type": "football",
     }   
 
     response5 = await client.post("/leagues/", json=league_data, headers=auth_headers)
-    response6 = await client.post(f"/leagues/{response5.json()['id']}/join", json={}, headers=auth_headers_2)
+    response6 = await client.post("/leagues/join", json={"invite_code": response5.json()["invite_code"]}, headers=auth_headers_2)
     response7 = await client.post(f"/teams/", json={"nom": "Team 1", "nom_stade": "Stadium 1", "id_league": response5.json()['id'], "is_ia": True}, headers=auth_headers)
     response8 = await client.post(f"/teams/", json={"nom": "Team 2", "nom_stade": "Stadium 2", "id_league": response5.json()['id'], "is_ia": False}, headers=auth_headers_2)
     response9 = await client.post(f"/leagues/{response5.json()['id']}/validate", json={}, headers=auth_headers)
@@ -194,7 +194,7 @@ async def test_score_unauthorized(client, auth_headers, auth_headers_2, match_se
     response1 = await client.post("/auth/register", json=player_data)
     response2 = await client.post("/auth/login", data=login_data)
     auth_headers_3 = {"Authorization": f"Bearer {response2.json()['access_token']}"}
-    response3 = await client.post(f"/leagues/{match_setup['league_id']}/join", json={}, headers=auth_headers_3)
+    response3 = await client.post("/leagues/join", json={"invite_code": match_setup["invite_code"]}, headers=auth_headers_3)
 
     # Act — on démarre le match avec le propriétaire de l'équipe à domicile
     await client.put(f"/matches/{match_id}/start", headers=auth_headers)

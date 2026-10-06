@@ -120,7 +120,7 @@ async def match_setup(client, auth_headers, auth_headers_2, db_session):
 
     # Act
     response5 = await client.post("/leagues/", json=league_data, headers=auth_headers)
-    response6 = await client.post(f"/leagues/{response5.json()['id']}/join", json={}, headers=auth_headers_2)
+    response6 = await client.post("/leagues/join", json={"invite_code": response5.json()["invite_code"]}, headers=auth_headers_2)
     response7 = await client.post(f"/teams/", json={"nom": "Team 1", "nom_stade": "Stadium 1", "id_league": response5.json()['id'], "is_ia": False}, headers=auth_headers)
     response8 = await client.post(f"/teams/", json={"nom": "Team 2", "nom_stade": "Stadium 2", "id_league": response5.json()['id'], "is_ia": False}, headers=auth_headers_2)
     response9 = await client.post(f"/leagues/{response5.json()['id']}/validate", json={}, headers=auth_headers)
@@ -129,6 +129,7 @@ async def match_setup(client, auth_headers, auth_headers_2, db_session):
     calendar = response10.json()
     yield {
         "league_id": response5.json()['id'],
+        "invite_code": response5.json()['invite_code'],
         "team1_id": response7.json()['id'],
         "team2_id": response8.json()['id'],
         "match_id1": calendar[0]['id'],

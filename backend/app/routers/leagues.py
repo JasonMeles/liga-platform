@@ -52,7 +52,13 @@ class EquipeResponse(BaseModel):
 class LigueValidateResponse(BaseModel):
     is_active : bool
 
-@router.post("/", response_model=LeagueResponse)
+class LeagueCreatedResponse(LeagueResponse):
+    invite_code: str
+
+class LeagueJoinRequest(BaseModel):
+    invite_code: str
+
+@router.post("/", response_model=LeagueCreatedResponse)
 async def create_league(
     data: LeagueCreate,
     db: AsyncSession = Depends(get_db),
@@ -88,7 +94,8 @@ async def create_league(
     "is_active": league.is_active,
     "total_journeys": league.total_journeys,
     "sport_type": league.sport_type,
-    "allow_same_owner_matches": league.allow_same_owner_matches
+    "allow_same_owner_matches": league.allow_same_owner_matches,
+    "invite_code": league.invite_code
     }
 
 
@@ -99,6 +106,45 @@ async def get_leagues(
 ):
     result = await db.execute(select(League).options(joinedload(League.player_leagues).joinedload(PlayerLeague.player)))
     return result.unique().scalars().all()
+
+
+@router.post("/join")
+async def join_league_by_invite_code(
+    data: LeagueJoinRequest,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    # Vérifie que la ligue existe
+    code = data.invite_code.strip().upper()
+    result = await db.execute(select(League).filter(League.invite_code == code))
+    league = result.scalars().first()
+    if not league:
+        logger.warning(f"Échec de la tentative de rejoindre la ligue avec le code {code}: ligue introuvable")
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    # Vérifie que le joueur n'est pas déjà dans la ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league.id,
+        )
+    )
+    already_in = result.scalars().first()
+    if already_in:
+        logger.warning(f"Échec de la tentative de rejoindre la ligue {league.id}: joueur {current_player.username} est déjà dans la ligue")
+        raise HTTPException(status_code=400, detail="Tu es déjà dans cette ligue")
+
+    # Ajoute le joueur comme membre
+    player_league = PlayerLeague(
+        player_id=current_player.id,
+        league_id=league.id,
+        role=LeagueRoleEnum.membre,
+    )
+    db.add(player_league)
+    await db.commit()
+    logger.info(f"Joueur {current_player.username} a rejoint la ligue {league.name}")
+    return {"message": f"Tu as rejoint la ligue {league.name}"}
+
 
 @router.post("/{league_id}/validate", response_model=LigueValidateResponse)
 async def validate_league(
@@ -186,42 +232,6 @@ async def get_teams(
         })
 
     return response
-
-@router.post("/{league_id}/join")
-async def join_league(
-    league_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_player: Player = Depends(get_current_player),
-):
-    # Vérifie que la ligue existe
-    result = await db.execute(select(League).filter(League.id == league_id))
-    league = result.scalars().first()
-    if not league:
-        logger.warning(f"Échec de la tentative de rejoindre la ligue {league_id}: ligue introuvable")
-        raise HTTPException(status_code=404, detail="Ligue introuvable")
-
-    # Vérifie que le joueur n'est pas déjà dans la ligue
-    result = await db.execute(
-        select(PlayerLeague).filter(
-            PlayerLeague.player_id == current_player.id,
-            PlayerLeague.league_id == league_id,
-        )
-    )
-    already_in = result.scalars().first()
-    if already_in:
-        logger.warning(f"Échec de la tentative de rejoindre la ligue {league_id}: joueur {current_player.username} est déjà dans la ligue")
-        raise HTTPException(status_code=400, detail="Tu es déjà dans cette ligue")
-
-    # Ajoute le joueur comme membre
-    player_league = PlayerLeague(
-        player_id=current_player.id,
-        league_id=league_id,
-        role=LeagueRoleEnum.membre,
-    )
-    db.add(player_league)
-    await db.commit()
-    logger.info(f"Joueur {current_player.username} a rejoint la ligue {league.name}")
-    return {"message": f"Tu as rejoint la ligue {league.name}"}
 
 
 @router.delete("/{league_id}/leave")
@@ -438,3 +448,29 @@ async def delete_league(
     await db.commit()
     logger.info(f"Ligue {league_id} supprimée avec succès")
     return {"message": "Ligue supprimée avec succès"}
+
+@router.get("/{league_id}/invite-code")
+async def get_invite_code(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player)
+):
+    result = await db.execute(
+            select(PlayerLeague).filter(
+                PlayerLeague.player_id == current_player.id,
+                PlayerLeague.league_id == league_id,
+                PlayerLeague.role == LeagueRoleEnum.manager,
+            )
+        )
+    manager = result.scalars().first()
+    if not manager:
+        logger.warning(f"Échec de la tentative de récupération du code d'invitation de la ligue {league_id}: joueur {current_player.username} n'est pas manager")
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas manager de cette ligue")
+    
+    league = await db.execute(select(League).filter(League.id == league_id))
+    league = league.scalar_one_or_none()
+    if not league:
+        logger.warning(f"Échec de la tentative de récupération du code d'invitation de la ligue {league_id}: ligue introuvable")
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+    
+    return {"invite_code": league.invite_code}

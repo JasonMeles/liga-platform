@@ -24,7 +24,7 @@ async def test_claim_team(client, auth_headers, auth_headers_2, db_session):
     # Act
     response = await client.post("/leagues/", json=league_data, headers=auth_headers)
     data = response.json()
-    response2 =await client.post(f"/leagues/{data['id']}/join", json={}, headers=auth_headers_2)
+    response2 = await client.post("/leagues/join", json={"invite_code": data["invite_code"]}, headers=auth_headers_2)
     team1_data["id_league"] = data["id"]
     response3 = await client.post(f"/teams/", json=team1_data, headers=auth_headers)
     response4 = await client.post(f"/teams/{response3.json()['id']}/claim", json={}, headers=auth_headers_2)
@@ -70,7 +70,7 @@ async def test_claim_team_max_per_player(client, auth_headers, auth_headers_2, d
     # Act
     response = await client.post("/leagues/", json=league_data, headers=auth_headers)
     data = response.json()
-    response2 =await client.post(f"/leagues/{data['id']}/join", json={}, headers=auth_headers_2)
+    response2 = await client.post("/leagues/join", json={"invite_code": data["invite_code"]}, headers=auth_headers_2)
     team1_data["id_league"] = data["id"]
     team2_data["id_league"] = data["id"]
     response3 = await client.post(f"/teams/", json=team1_data, headers=auth_headers)
@@ -134,7 +134,7 @@ async def test_claim_team_already_taken(client, auth_headers, auth_headers_2, db
     data = response.json()
     team1_data["id_league"] = data["id"]
     response3 = await client.post(f"/teams/", json=team1_data, headers=auth_headers)
-    response2 =await client.post(f"/leagues/{data['id']}/join", json={}, headers=auth_headers_2)
+    response2 = await client.post("/leagues/join", json={"invite_code": data["invite_code"]}, headers=auth_headers_2)
     response4 = await client.post(f"/teams/{response3.json()['id']}/claim", json={}, headers=auth_headers_2)
     response5 = await client.post(f"/teams/{response3.json()['id']}/claim", json={}, headers=auth_headers)
 

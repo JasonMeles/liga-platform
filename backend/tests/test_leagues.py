@@ -1,10 +1,33 @@
 import pytest
 from sqlalchemy import select
-from app.models.player import Player, PlayerLeague, LeagueRoleEnum, League, PlayerLeague
+from app.models.player import Player, PlayerLeague, LeagueRoleEnum, League
 from app.models.team import Team
 from app.models.match import Match
 from app.models.feed_item import FeedItem
-from tests.conftest import auth_headers_2
+
+
+# Données de ligue réutilisées par les tests de jointure
+LEAGUE_DATA = {
+    "name": "Test League",
+    "max_teams": 10,
+    "max_per_player": 2,
+    "total_journeys": 5,
+    "sport_type": "football"
+}
+
+
+async def get_membership(db_session, username, league_id):
+    """Renvoie la ligne PlayerLeague d'un joueur (retrouvé par son nom) dans une ligue, ou None."""
+    result = await db_session.execute(select(Player).filter(Player.username == username))
+    player = result.scalars().first()
+    result = await db_session.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == player.id,
+            PlayerLeague.league_id == league_id,
+        )
+    )
+    return result.scalars().first()
+
 
 @pytest.mark.asyncio
 async def test_create_league(client, auth_headers, db_session):
@@ -54,8 +77,8 @@ async def test_create_leagues_same_name_allowed(client, auth_headers, db_session
 
     result = await db_session.execute(select(League).where(League.name == league_data["name"]))
     leagues = result.scalars().all()
-    assert len(leagues) == 2  # Deux ligues avec le même nom sont autorisées, car le nom n'est pas unique dans la base de données.
-    assert leagues[0].invite_code != leagues[1].invite_code  # Les deux ligues ont des codes d'invitation différents dans la base de données, car le code d'invitation est unique.
+    assert len(leagues) == 2  # Deux ligues avec le même nom sont autorisées
+    assert leagues[0].invite_code != leagues[1].invite_code  # Mais chacune a son propre code
 
 @pytest.mark.asyncio
 async def test_create_league_unauthorized(client):
@@ -163,9 +186,6 @@ async def test_delete_league(client, auth_headers, db_session, match_setup):
 
 @pytest.mark.asyncio
 async def test_leave_league_transfer_teams_to_ai(client, auth_headers_2, match_setup, db_session):
-    # Arrange
-    
-
     # Act
     response5 = await client.delete(f"/leagues/{match_setup['league_id']}/leave", headers=auth_headers_2)
     response_teamq = await db_session.execute(select(Team).filter(Team.id == match_setup['team2_id']))
@@ -173,5 +193,97 @@ async def test_leave_league_transfer_teams_to_ai(client, auth_headers_2, match_s
     response_ai = await db_session.execute(select(Player).filter(Player.username == "AI"))
     ai_player = response_ai.scalars().first()
 
+    # Assert
     assert response5.status_code == 200
-    assert team2.id_owner ==  ai_player.id 
+    assert team2.id_owner ==  ai_player.id
+
+
+# ---------------------------------------------------------------------------
+# Jointure par code d'invitation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_join_league(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — une ligue neuve créée par TestPlayer1
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+
+    # Act — TestPlayer2 rejoint avec le code
+    response = await client.post("/leagues/join", json={"invite_code": league["invite_code"]}, headers=auth_headers_2)
+    membership = await get_membership(db_session, "TestPlayer2", league["id"])
+
+    # Assert
+    assert response.status_code == 200
+    assert membership is not None
+    assert membership.role == LeagueRoleEnum.membre
+
+
+@pytest.mark.asyncio
+async def test_join_league_already_member(client, auth_headers_2, match_setup):
+    # Act — match_setup a déjà fait entrer TestPlayer2 dans la ligue
+    response = await client.post("/leagues/join", json={"invite_code": match_setup["invite_code"]}, headers=auth_headers_2)
+
+    # Assert
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Tu es déjà dans cette ligue"
+
+
+@pytest.mark.asyncio
+async def test_join_league_invalid_invite_code(client, auth_headers, auth_headers_2, db_session):
+    # Arrange
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+
+    # Act
+    response = await client.post("/leagues/join", json={"invite_code": "ZZZZZZ"}, headers=auth_headers_2)
+    membership = await get_membership(db_session, "TestPlayer2", league["id"])
+
+    # Assert
+    assert response.status_code == 404
+    assert membership is None
+
+
+@pytest.mark.asyncio
+async def test_join_league_code_is_normalized(client, auth_headers, auth_headers_2, db_session):
+    # Arrange
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+    messy_code = f"  {league['invite_code'].lower()} "  # minuscules + espaces autour
+
+    # Act
+    response = await client.post("/leagues/join", json={"invite_code": messy_code}, headers=auth_headers_2)
+    membership = await get_membership(db_session, "TestPlayer2", league["id"])
+
+    # Assert
+    assert response.status_code == 200
+    assert membership is not None
+    assert membership.role == LeagueRoleEnum.membre
+
+
+@pytest.mark.asyncio
+async def test_get_invite_code_only_manager(client, auth_headers, auth_headers_2):
+    # Arrange — TestPlayer2 crée la ligue (manager), TestPlayer1 la rejoint (membre)
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers_2)
+    league = response1.json()
+    await client.post("/leagues/join", json={"invite_code": league["invite_code"]}, headers=auth_headers)
+
+    # Act
+    response_manager = await client.get(f"/leagues/{league['id']}/invite-code", headers=auth_headers_2)
+    response_member = await client.get(f"/leagues/{league['id']}/invite-code", headers=auth_headers)
+
+    # Assert — le manager reçoit le code, le membre est refusé
+    assert response_manager.status_code == 200
+    assert response_manager.json()["invite_code"] == league["invite_code"]
+    assert response_member.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_invite_code_not_in_league_list(client, auth_headers_2, match_setup):
+    # Act
+    response = await client.get("/leagues/", headers=auth_headers_2)
+    leagues = response.json()
+
+    # Assert
+    assert response.status_code == 200
+    assert len(leagues) > 0  # sinon all() serait vrai sur une liste vide
+    assert all("invite_code" not in league for league in leagues)
