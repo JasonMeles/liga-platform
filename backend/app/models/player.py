@@ -51,6 +51,7 @@ class League(Base):
     allow_same_owner_matches = Column(Boolean, default = True, server_default="true", nullable = False )
     total_journeys = Column(Integer, nullable=False)
     sport_type = Column(Enum(SportTypeEnum), nullable=False, default=SportTypeEnum.football)
+    invite_code = Column(String(6), unique=True, nullable=False)
     player_leagues = relationship("PlayerLeague", passive_deletes=True)
     @property 
     def manager_username(self) -> str: 
