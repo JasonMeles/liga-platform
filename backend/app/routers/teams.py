@@ -48,11 +48,15 @@ async def create_team(
     if not player_in:
         logger.warning(f"{current_player.username} n'est pas dans la league {data.id_league}")
         raise HTTPException(status_code=403, detail="Vous n'êtes pas dans cette ligue")
-    
 
-    #Verifie si le nombre max de team est atteint
+    #Vérifier si la ligue est active
     result = await db.execute(select(League).filter(League.id == data.id_league))
     league = result.scalars().first()
+    if league.is_active:
+        logger.warning(f"La ligue {data.id_league} est active, {current_player.username} ne peut pas créer d'équipe")
+        raise HTTPException(status_code=400, detail="Cette ligue a déjà commencé, vous ne pouvez plus créer d'équipe")
+
+    #Verifie si le nombre max de team est atteint
     result2 = await db.execute(select(Team).filter(Team.id_league == data.id_league))
     equipes_actuelles = result2.scalars().all()
     if len(equipes_actuelles) >= league.max_team:

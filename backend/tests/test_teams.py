@@ -142,3 +142,20 @@ async def test_claim_team_already_taken(client, auth_headers, auth_headers_2, db
     assert response3.status_code == 200
     assert response4.status_code == 200
     assert response5.status_code == 403
+
+@pytest.mark.asyncio
+async def test_create_team_in_active_league(client, auth_headers, match_setup):
+    # Arrange
+    team_data = {
+        "nom": "Team 3",
+        "nom_stade": "Stadium 3",
+        "id_league": match_setup["league_id"],
+        "is_ia": False
+    }
+
+    # Act
+    response = await client.post(f"/teams/", json=team_data, headers=auth_headers)
+
+    # Assert
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Cette ligue a déjà commencé, vous ne pouvez plus créer d'équipe"
