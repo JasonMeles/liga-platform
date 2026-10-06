@@ -159,3 +159,42 @@ async def test_create_team_in_active_league(client, auth_headers, match_setup):
     # Assert
     assert response.status_code == 400
     assert response.json()["detail"] == "Cette ligue a déjà commencé, vous ne pouvez plus créer d'équipe"
+
+@pytest.mark.asyncio
+async def test_delete_team_in_active_league(client, auth_headers, match_setup):
+    # Arrange
+    team_id = match_setup["team1_id"]
+
+    # Act
+    response = await client.delete(f"/teams/{team_id}", headers=auth_headers)
+    response2 = await client.get(f"/teams/{team_id}", headers=auth_headers)
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["action"] == "abandoned"
+    assert response2.status_code == 200
+    assert response2.json()["owner_username"] == "AI"
+
+@pytest.mark.asyncio
+async def test_delete_team_in_inactive_league(client, auth_headers):
+    # Arrange — ligue créée mais jamais validée
+    league_data = {
+        "name": "Test League",
+        "max_teams": 10,
+        "max_per_player": 2,
+        "total_journeys": 5,
+        "sport_type": "football"
+    }
+    response1 = await client.post("/leagues/", json=league_data, headers=auth_headers)
+    league_id = response1.json()["id"]
+    response2 = await client.post("/teams/", json={"nom": "Team 1", "nom_stade": "Stadium 1", "id_league": league_id, "is_ia": False}, headers=auth_headers)
+    team_id = response2.json()["id"]
+
+    # Act
+    response = await client.delete(f"/teams/{team_id}", headers=auth_headers)
+    response_get = await client.get(f"/teams/{team_id}", headers=auth_headers)
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["action"] == "deleted"
+    assert response_get.status_code == 404

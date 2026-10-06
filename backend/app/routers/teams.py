@@ -204,12 +204,27 @@ async def delete_team(team_id: int, db: AsyncSession = Depends(get_db), current_
     result = await db.execute(select(Team).where(Team.id == team_id))
     equipe = result.scalar_one_or_none()
     if equipe is None:
+        logger.warning(f"Échec de la suppression de l'équipe {team_id}: équipe introuvable")
         raise HTTPException(status_code=404, detail="Equipe introuvable")
     if equipe.id_owner != current_player.id:
+        logger.warning(f"Échec de la suppression de l'équipe {team_id}: {current_player.username} n'est pas le propriétaire")
         raise HTTPException(status_code=403, detail="N'est le propriétaire de l'équipe")
+
+    league = await db.execute(select(League).filter(League.id == equipe.id_league))
+    league = league.scalars().first()
+    if league.is_active:
+        ai = await db.execute(select(Player).filter(Player.username == "AI"))
+        ai = ai.scalars().first()
+        equipe.id_owner = ai.id
+        await db.commit()
+        logger.info(f"{current_player.username} a abandonné l'équipe {equipe.nom}, elle est maintenant contrôlée par l'IA")
+        return {"action": "abandoned", "message": f"L'équipe {equipe.nom} est maintenant contrôlée par l'IA"} 
+
+    nom_equipe = equipe.nom
     await db.delete(equipe)
     await db.commit()
-    return {"message": f"Equipe {team_id} supprimé"} #affiche le nom de l'équipe supprimé
+    logger.info(f"{current_player.username} a supprimé l'équipe {nom_equipe}")
+    return {"action": "deleted", "message": f"L'équipe {nom_equipe} a été supprimée"} 
 
 
 
