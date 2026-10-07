@@ -107,6 +107,17 @@ async def get_leagues(
     result = await db.execute(select(League).options(joinedload(League.player_leagues).joinedload(PlayerLeague.player)))
     return result.unique().scalars().all()
 
+@router.get("/me", response_model=list[LeagueResponse])
+async def get_my_leagues(
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    result = await db.execute(
+        select(League).options(joinedload(League.player_leagues).joinedload(PlayerLeague.player))
+        .join(PlayerLeague)
+        .filter(PlayerLeague.player_id == current_player.id)
+    )
+    return result.unique().scalars().all()
 
 @router.post("/join")
 async def join_league_by_invite_code(

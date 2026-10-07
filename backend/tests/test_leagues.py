@@ -287,3 +287,45 @@ async def test_invite_code_not_in_league_list(client, auth_headers_2, match_setu
     assert response.status_code == 200
     assert len(leagues) > 0  # sinon all() serait vrai sur une liste vide
     assert all("invite_code" not in league for league in leagues)
+
+
+@pytest.mark.asyncio
+async def test_show_only_my_leagues(client, auth_headers, auth_headers_2):
+    # Arrange
+    league2 = {
+        "name": "Test League 2",
+        "max_teams": 10,
+        "max_per_player": 2,
+        "total_journeys": 5,
+        "sport_type": "football",
+    }
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    response2 = await client.post("/leagues/", json=league2, headers=auth_headers_2)
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+
+    joined = await client.post(
+        "/leagues/join",
+        json={"invite_code": response1.json()["invite_code"]},
+        headers=auth_headers_2,
+    )
+    assert joined.status_code == 200
+
+    # Act
+    my_leagues_a = await client.get("/leagues/me", headers=auth_headers)
+    my_leagues_b = await client.get("/leagues/me", headers=auth_headers_2)
+
+    # Assert
+    assert my_leagues_a.status_code == 200
+    assert my_leagues_b.status_code == 200
+
+    leagues_a = {l["name"]: l for l in my_leagues_a.json()}
+    leagues_b = {l["name"]: l for l in my_leagues_b.json()}
+
+    # A ne voit que L1
+    assert set(leagues_a) == {LEAGUE_DATA["name"]}
+    # B voit L1 (rejointe) et L2 (créée)
+    assert set(leagues_b) == {LEAGUE_DATA["name"], "Test League 2"}
+    # Le manager de L1 reste A, même vu depuis B
+    assert leagues_b[LEAGUE_DATA["name"]]["manager_username"] == "TestPlayer1"
+    assert leagues_b["Test League 2"]["manager_username"] == "TestPlayer2"
