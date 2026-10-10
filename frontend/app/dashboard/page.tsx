@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../components/AuthProvider";
 import { useRequireAuth } from "../hooks/useRequireAuth";
+import Link from "next/link"; 
 
 export default function DashboardPage() {
   const { accessToken, authFetch } = useAuth();
@@ -27,17 +28,17 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto flex min-h-screen flex-col items-center px-6 pt-24 text-center">
   <h1 className="font-display text-3xl text-ink">Bienvenue {username} !</h1>
-
+  {isJoinOpen && <p>Modale ouverte</p>}
   <div className="mt-12 grid w-full max-w-5xl grid-cols-1 gap-6 sm:grid-cols-3">
-    <div className="rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7">
+    <Link href="/leagues/new" className="rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7 text-white">
       Créer une ligue
-    </div>
-    <div className="rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7">
+    </Link>
+    <button onClick={() => setIsJoinOpen(true)} className="rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7 text-white cursor-pointer">
       Rejoindre une ligue
-    </div>
-    <div className="rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7">
+    </button>
+    <Link href="/leagues" className="rounded-3xl bg-ink/55 px-6 py-6 text-center backdrop-blur-sm sm:px-10 sm:py-7 text-white">
       Mes ligues
-    </div>
+    </Link>
   </div>
 </main>
   );
