@@ -12,14 +12,14 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
   const isGuest = useRequireAuth("guest");
-  function handleChanges(e) {
+  function handleChanges(e: React.ChangeEvent<HTMLInputElement>) {
   const changes = e.target.name
   const nouvelleValeur = e.target.value;
   const nouvelObjet = { ...formData, [changes]: nouvelleValeur };
   setFormData(nouvelObjet);
   }
 
-  async function handleSubmit(e) {
+  async function handleSubmit(e: React.ChangeEvent<HTMLInputElement>) {
   setErrorMessage("");
   e.preventDefault();
   const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
