@@ -365,7 +365,7 @@ async def test_create_league_max_per_player_greater_than_max_teams(client, auth_
 
     # Assert
     assert response.status_code == 422
-    assert "max_per_player ne peut pas dépasser max_teams" in response.json()["detail"][0]["msg"]
+    assert "Le nombre d'équipes contrôlées par joueur ne peut pas dépasser le nombre maximum d'équipes dans la ligue" in response.json()["detail"][0]["msg"]
 
 
 @pytest.mark.asyncio

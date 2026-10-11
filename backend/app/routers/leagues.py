@@ -32,7 +32,7 @@ class LeagueCreate(BaseModel):
     @model_validator(mode="after")
     def check_max_per_player(self):
         if self.max_per_player > self.max_teams:
-            raise ValueError("max_per_player ne peut pas dépasser max_teams")
+            raise ValueError("Le nombre d'équipes contrôlées par joueur ne peut pas dépasser le nombre maximum d'équipes dans la ligue")
         return self
 
 class LeagueResponse(BaseModel):
