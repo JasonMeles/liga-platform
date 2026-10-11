@@ -13,14 +13,14 @@ export default function RegisterPage() {
   const isGuest = useRequireAuth("guest");
   const { login } = useAuth();
 
-  function handleChanges(e) {
+  function handleChanges(e: React.ChangeEvent<HTMLInputElement>) {
     const changes = e.target.name;
     const nouvelleValeur = e.target.value;
     const nouvelObjet = { ...formData, [changes]: nouvelleValeur };
     setFormData(nouvelObjet);
   }
 
-  async function handleSubmit(e) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>){
     setErrorMessage("");
     e.preventDefault();
 

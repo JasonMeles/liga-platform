@@ -19,7 +19,7 @@ export default function LoginPage() {
   setFormData(nouvelObjet);
   }
 
-  async function handleSubmit(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>){
   setErrorMessage("");
   e.preventDefault();
   const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
