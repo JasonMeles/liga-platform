@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import joinedload
 from app.database.connection import get_db
 from app.models.player import Player, League, PlayerLeague, LeagueRoleEnum, SportTypeEnum
@@ -21,13 +21,19 @@ router = APIRouter(prefix="/leagues", tags=["Leagues"])
 
 
 class LeagueCreate(BaseModel):
-    name: str
-    max_teams: int
-    max_per_player: int
-    total_journeys: int
+    model_config = {"str_strip_whitespace": True}
+    name: str = Field(min_length=1, max_length=30)
+    max_teams: int = Field(ge=2, le=100)
+    max_per_player: int = Field(ge=1)
+    total_journeys: int = Field(ge=1, le=100)
     sport_type: SportTypeEnum
     allow_same_owner_matches: bool = True
 
+    @model_validator(mode="after")
+    def check_max_per_player(self):
+        if self.max_per_player > self.max_teams:
+            raise ValueError("max_per_player ne peut pas dépasser max_teams")
+        return self
 
 class LeagueResponse(BaseModel):
     id: int

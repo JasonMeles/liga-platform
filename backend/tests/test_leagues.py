@@ -329,3 +329,59 @@ async def test_show_only_my_leagues(client, auth_headers, auth_headers_2):
     # Le manager de L1 reste A, même vu depuis B
     assert leagues_b[LEAGUE_DATA["name"]]["manager_username"] == "TestPlayer1"
     assert leagues_b["Test League 2"]["manager_username"] == "TestPlayer2"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "champ, valeur",
+    [
+        ("name", ""),
+        ("name", "   "),
+        ("name", "a" * 31),
+        ("max_teams", 1),
+        ("max_teams", 101),
+        ("max_per_player", 0),
+        ("total_journeys", 0),
+        ("total_journeys", 101),
+    ],
+)
+async def test_create_league_invalid(client, auth_headers, champ, valeur):
+    # Arrange : on part de données valides et on en casse UNE seule
+    data = {**LEAGUE_DATA, champ: valeur}
+
+    # Act
+    response = await client.post("/leagues/", json=data, headers=auth_headers)
+
+    # Assert
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_create_league_max_per_player_greater_than_max_teams(client, auth_headers):
+    # Arrange : on part de données valides
+    data = {**LEAGUE_DATA, "max_per_player": 11, "max_teams": 10}
+
+    # Act
+    response = await client.post("/leagues/", json=data, headers=auth_headers)
+
+    # Assert
+    assert response.status_code == 422
+    assert "max_per_player ne peut pas dépasser max_teams" in response.json()["detail"][0]["msg"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"name": "a",      "max_teams": 2,   "max_per_player": 1,   "total_journeys": 1},    # limites basses
+        {"name": "a" * 30, "max_teams": 100, "max_per_player": 100, "total_journeys": 100},  # limites hautes
+    ],
+)
+async def test_create_league_valid_limits(client, auth_headers, overrides):
+    # Arrange : données valides, avec les valeurs aux limites
+    data = {**LEAGUE_DATA, **overrides}
+
+    # Act
+    response = await client.post("/leagues/", json=data, headers=auth_headers)
+
+    # Assert
+    assert response.status_code == 200
