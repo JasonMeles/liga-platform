@@ -385,3 +385,68 @@ async def test_create_league_valid_limits(client, auth_headers, overrides):
 
     # Assert
     assert response.status_code == 200
+
+@pytest.mark.asyncio
+async def test_get_league_details(client, auth_headers):
+    # Arrange — TestPlayer1 crée la ligue (manager)
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+
+    # Act
+    response_manager = await client.get(f"/leagues/{league['id']}", headers=auth_headers)
+
+    # Assert 
+    assert response_manager.status_code == 200
+
+    data_manager = response_manager.json()
+
+    assert data_manager["id"] == league["id"]
+    assert data_manager["manager_username"] == "TestPlayer1"
+    assert data_manager["my_role"] == "manager"
+    assert data_manager["max_teams"] == LEAGUE_DATA["max_teams"]
+
+
+@pytest.mark.asyncio
+async def test_get_league_details_member(client, auth_headers, auth_headers_2):
+    # Arrange — B crée L2 EN PREMIER, puis A crée L1, et B rejoint L1.
+    # Ainsi, une requête qui renverrait "la première ligue venue" renverrait L2 → le test échouerait.
+    other = await client.post("/leagues/", json={**LEAGUE_DATA, "name": "Other League"}, headers=auth_headers_2)
+    assert other.status_code == 200
+
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+    joined = await client.post("/leagues/join", json={"invite_code": league["invite_code"]}, headers=auth_headers_2)
+    assert joined.status_code == 200
+
+    # Act
+    response_member = await client.get(f"/leagues/{league['id']}", headers=auth_headers_2)
+
+    # Assert
+    assert response_member.status_code == 200
+    data_member = response_member.json()
+    assert data_member["id"] == league["id"]
+    assert data_member["name"] == LEAGUE_DATA["name"]
+    assert data_member["manager_username"] == "TestPlayer1"
+    assert data_member["my_role"] == "membre"
+
+@pytest.mark.asyncio
+async def test_get_league_details_not_member(client, auth_headers, auth_headers_2):
+    # Arrange — TestPlayer1 crée la ligue (manager)
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+
+    # Act
+    response_not_member = await client.get(f"/leagues/{league['id']}", headers=auth_headers_2)
+
+    # Assert 
+    assert response_not_member.status_code == 404
+    assert response_not_member.json()["detail"] == "Ligue introuvable"
+
+@pytest.mark.asyncio
+async def test_get_league_details_not_found(client, auth_headers):
+    # Act
+    response_not_found = await client.get(f"/leagues/9999", headers=auth_headers)
+
+    # Assert 
+    assert response_not_found.status_code == 404
+    assert response_not_found.json()["detail"] == "Ligue introuvable"

@@ -45,6 +45,16 @@ class LeagueResponse(BaseModel):
     allow_same_owner_matches: bool 
 
     model_config = {"from_attributes": True}
+class LeagueDetailResponse(BaseModel):
+    id: int
+    name: str
+    sport_type: SportTypeEnum
+    is_active: bool
+    max_teams: int
+    max_per_player: int
+    total_journeys: int
+    manager_username: str
+    my_role: LeagueRoleEnum   # "manager" ou "membre" : décide des boutons affichés
 
 class EquipeResponse(BaseModel):
     id: int
@@ -161,6 +171,56 @@ async def join_league_by_invite_code(
     await db.commit()
     logger.info(f"Joueur {current_player.username} a rejoint la ligue {league.name}")
     return {"message": f"Tu as rejoint la ligue {league.name}"}
+
+@router.get("/{league_id}", response_model=LeagueDetailResponse)
+async def get_league_details(
+    league_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player),
+):
+    result = await db.execute(
+        select(League)
+        .filter(League.id == league_id)
+        )
+    league = result.scalars().first()    
+    if not league:
+        logger.warning(f"Échec de la tentative d'affichage des détails de la ligue {league_id}: ligue introuvable")
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    # Vérifie que le joueur est dans la ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league_id,
+        )
+    )
+    player_league = result.scalars().first()
+    if not player_league:
+        logger.warning(f"Échec de la tentative d'affichage des détails de la ligue {league_id}: joueur {current_player.username} non présent dans la ligue")
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+    # Récupère le nom du manager
+    result = await db.execute(
+            select(Player.username)
+            .join(PlayerLeague, PlayerLeague.player_id == Player.id)
+            .filter(
+                PlayerLeague.league_id == league_id,
+                PlayerLeague.role == LeagueRoleEnum.manager,
+            )
+            )
+    manager_username = result.scalar_one()
+    
+    return {
+        "id": league.id,
+        "name": league.name,
+        "sport_type": league.sport_type,
+        "is_active": league.is_active,
+        "max_teams": league.max_team,
+        "max_per_player": league.max_per_player,
+        "total_journeys": league.total_journeys,
+        "manager_username": manager_username,
+        "my_role": player_league.role
+    }
+
 
 
 @router.post("/{league_id}/validate", response_model=LigueValidateResponse)
