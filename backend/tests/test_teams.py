@@ -198,3 +198,29 @@ async def test_delete_team_in_inactive_league(client, auth_headers):
     assert response.status_code == 200
     assert response.json()["action"] == "deleted"
     assert response_get.status_code == 404
+
+@pytest.mark.asyncio
+async def test_journeys_remaining_in_response(client, auth_headers):
+    # Arrange
+    league_data = {
+        "name": "Test League",
+        "max_teams": 10,
+        "max_per_player": 2,
+        "total_journeys": 5,
+        "sport_type": "football"
+    }
+    response1 = await client.post("/leagues/", json=league_data, headers=auth_headers)
+    league_id = response1.json()["id"]
+    team_data = {
+        "nom": "Team 1",
+        "nom_stade": "Stadium 1",
+        "id_league": league_id,
+        "is_ia": False
+    }
+
+    # Act
+    response2 = await client.post("/teams/", json=team_data, headers=auth_headers)
+
+    # Assert
+    assert response2.status_code == 200
+    assert response2.json()["journeys_remaining"] == 5
