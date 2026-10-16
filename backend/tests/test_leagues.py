@@ -450,3 +450,33 @@ async def test_get_league_details_not_found(client, auth_headers):
     # Assert 
     assert response_not_found.status_code == 404
     assert response_not_found.json()["detail"] == "Ligue introuvable"
+
+@pytest.mark.asyncio
+async def test_get_league_teams_not_member(client, auth_headers, auth_headers_2):
+    # Arrange
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+
+    # Act
+    response_teams = await client.get(f"/leagues/{league['id']}/teams", headers=auth_headers_2)
+
+    # Assert
+    assert response_teams.status_code == 404
+    assert response_teams.json()["detail"] == "Ligue introuvable"
+
+@pytest.mark.asyncio
+async def test_get_league_teams_member(client, auth_headers, auth_headers_2):
+    # Arrange
+    response1 = await client.post("/leagues/", json=LEAGUE_DATA, headers=auth_headers)
+    league = response1.json()
+    joined = await client.post("/leagues/join", json={"invite_code": league["invite_code"]}, headers=auth_headers_2)
+    assert joined.status_code == 200
+    # Act
+    
+    
+    response_teams = await client.get(f"/leagues/{league['id']}/teams", headers=auth_headers_2)
+
+    # Assert
+    
+    assert response_teams.status_code == 200
+    assert response_teams.json() == []
