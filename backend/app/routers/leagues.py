@@ -284,6 +284,19 @@ async def get_teams(
     result = await db.execute(select(League).filter(League.id == league_id))
     league = result.scalars().first()
     if not league:
+        logger.warning(f"Échec de la tentative d'affichage des équipes de la ligue {league_id}: ligue introuvable")
+        raise HTTPException(status_code=404, detail="Ligue introuvable")
+
+    # Vérifie que le joueur est dans la ligue
+    result = await db.execute(
+        select(PlayerLeague).filter(
+            PlayerLeague.player_id == current_player.id,
+            PlayerLeague.league_id == league_id,
+        )
+    )
+    player_league = result.scalars().first()
+    if not player_league:
+        logger.warning(f"Échec de la tentative d'affichage des équipes de la ligue {league_id}: joueur {current_player.username} non présent dans la ligue")
         raise HTTPException(status_code=404, detail="Ligue introuvable")
 
     result = await db.execute(
