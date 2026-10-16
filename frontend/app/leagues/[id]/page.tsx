@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../components/AuthProvider";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import type { LeagueDetail } from "@/app/types/league";
+import TeamList from "./TeamList";
 
 
 export default function LeaguePage() {
@@ -54,6 +55,7 @@ export default function LeaguePage() {
             <p>État : {league.is_active ? "Active" : "Inactive"}</p>
             <p>Journées : {league.total_journeys}</p>
             <p>Rôle : {league.my_role}</p>
+            <TeamList leagueId={id} />
         </main>
     );
 }
