@@ -55,7 +55,7 @@ export default function LeaguePage() {
             <p>État : {league.is_active ? "Active" : "Inactive"}</p>
             <p>Journées : {league.total_journeys}</p>
             <p>Rôle : {league.my_role}</p>
-            <TeamList leagueId={id} />
+            <TeamList leagueId={id} maxTeams={league.max_teams} maxPerPlayer={league.max_per_player} />
         </main>
     );
 }
