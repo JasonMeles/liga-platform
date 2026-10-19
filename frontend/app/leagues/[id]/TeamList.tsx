@@ -1,16 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../components/AuthProvider";
-import type { Team } from "@/app/types/league";
+import type { LeagueDetail, Team } from "@/app/types/league";
 import CreateTeamModal from "./CreateTeamModal";
 
-export default function TeamList({ leagueId, maxTeams, maxPerPlayer }: { leagueId: string, maxTeams: number, maxPerPlayer: number }) {
+export default function TeamList({ leagueId, maxTeams, maxPerPlayer, myRole }: { leagueId: string, maxTeams: number, maxPerPlayer: number, myRole : LeagueDetail["my_role"] }) {
 
     const { accessToken, username, authFetch } = useAuth();
     // --- États ---
     const [teams, setTeams] = useState<Team[] | null>(null); // null = pas encore chargé
     const [error, setError] = useState<string | null>(null);
     const [showModal, setShowModal] = useState(false);
+    
 
     useEffect(() => {
         if (!accessToken) return;
@@ -27,13 +28,14 @@ export default function TeamList({ leagueId, maxTeams, maxPerPlayer }: { leagueI
     const myTeamsCount = teams ? teams.filter((t) => t.owner_username === username).length : 0;
     const placesLeft = teams ? maxTeams - teams.length : 0;
     const myPlacesLeft = Math.min(maxPerPlayer - myTeamsCount, placesLeft);
+    const canAddTeam = myPlacesLeft > 0 || (myRole === "manager" && placesLeft > 0);
 
 
     return (
         <section className="mt-12 w-full max-w-5xl">
             <h2 className="font-display text-2xl text-ink">Équipes</h2>
-            {showModal && <CreateTeamModal onClose={() => setShowModal(false)} leagueId = {leagueId} onCreated={(team) => setTeams([...(teams ?? []), team])} />}
-            <button onClick={() => setShowModal(true)}>Inscrire une équipe</button>
+            {showModal && <CreateTeamModal onClose={() => setShowModal(false)} leagueId = {leagueId} onCreated={(team) => setTeams([...(teams ?? []), team])} myRole={myRole}/>}
+            <button onClick={() => setShowModal(true)} disabled={!canAddTeam} >Inscrire une équipe</button>
             {error && <p className="mt-6 text-red-600">{error}</p>}
             {!error && teams === null && <p className="mt-6">Chargement…</p>}
             {!error && teams !== null && <p className="mt-6"> Nombre d'equipes totales restantes à inscrire : {placesLeft} / {maxTeams} </p>}

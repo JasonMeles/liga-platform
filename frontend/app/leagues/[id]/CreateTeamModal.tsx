@@ -1,16 +1,17 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/app/components/AuthProvider";
-import type {Team}  from "@/app/types/league"
+import type { Team, LeagueDetail } from "@/app/types/league"
 
 
 type CreateTeamModalProps = {
     leagueId: string;
     onClose: () => void;
-    onCreated: (team : Team) => void;
+    onCreated: (team: Team) => void;
+    myRole: LeagueDetail["my_role"]
 };
 
-export default function CreateTeamModal({ onClose, leagueId, onCreated }: CreateTeamModalProps) {
+export default function CreateTeamModal({ onClose, leagueId, onCreated, myRole }: CreateTeamModalProps) {
     const { accessToken, authFetch } = useAuth();
     const [errorMessage, setErrorMessage] = useState("");
     const [equipe, setEquipe] = useState({
@@ -22,7 +23,7 @@ export default function CreateTeamModal({ onClose, leagueId, onCreated }: Create
 
     function handleChanges(e: React.ChangeEvent<HTMLInputElement>) {
         const changes = e.target.name;
-        const nouvelleValeur = e.target.value;
+        const nouvelleValeur = e.target.type === "checkbox" ? e.target.checked : e.target.value;
         const nouvelObjet = { ...equipe, [changes]: nouvelleValeur };
         setEquipe(nouvelObjet);
     }
@@ -83,6 +84,12 @@ export default function CreateTeamModal({ onClose, leagueId, onCreated }: Create
                         maxLength={30}
                         required
                     />
+                    {myRole === "manager" && (
+                        <label className="flex items-center gap-2 text-white">
+                            <input type="checkbox" name="is_ia" checked={equipe.is_ia} onChange={handleChanges} />
+                            Équipe IA
+                        </label>
+                    )}
                     <div className="flex justify-center gap-3">
                         <button type="button" onClick={onClose} className="cursor-pointer rounded-full border border-white/40 px-6 py-2 text-white">
                             Annuler
