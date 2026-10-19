@@ -5,7 +5,8 @@ import { useAuth } from "./AuthProvider";
 
 export default function SiteHeader() {
   const pathname = usePathname();
-  const { accessToken, logout } = useAuth();
+  const { accessToken, username,logout } = useAuth();
+
 
   if (pathname.startsWith("/auth")) {
     return null;
@@ -22,6 +23,7 @@ export default function SiteHeader() {
           Se déconnecter
         </button>
       )}
+      {username && <p className="font-sans text-sm text-ink">Connecté : {username}</p>}
     </header>
   );
 }
