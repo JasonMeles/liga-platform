@@ -57,7 +57,7 @@ export default function LeaguePage() {
             <p>État : {league.is_active ? "Active" : "Inactive"}</p>
             <p>Journées : {league.total_journeys}</p>
             <p>Rôle : {league.my_role}</p>
-            <TeamList leagueId={id} maxTeams={league.max_teams} maxPerPlayer={league.max_per_player} myRole={league.my_role}/>
+            <TeamList leagueId={id} maxTeams={league.max_teams} maxPerPlayer={league.max_per_player} myRole={league.my_role} onLaunchLeague={() => setLeague({ ...league, is_active: true })} isActive={league.is_active}/>
         </main>
     );
 }
