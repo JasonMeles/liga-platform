@@ -85,7 +85,7 @@ export default function CreateTeamModal({ onClose, leagueId, onCreated, myRole }
                         required
                     />
                     {myRole === "manager" && (
-                        <label className="flex items-center gap-2 text-white">
+                        <label className="flex w-fit items-center gap-2 self-center text-white">
                             <input type="checkbox" name="is_ia" checked={equipe.is_ia} onChange={handleChanges} />
                             Équipe IA
                         </label>

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../components/AuthProvider";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import type { LeagueDetail } from "@/app/types/league";
+import InviteCode from "./InviteCode";
 import TeamList from "./TeamList";
 
 
@@ -50,6 +51,7 @@ export default function LeaguePage() {
     return (
         <main className="mx-auto flex min-h-screen flex-col items-center px-6 pt-24 text-center">
             <h1 className="font-display text-3xl text-ink">Ligue : {league.name}</h1>
+            {league.my_role === "manager" && <InviteCode leagueId={id} />} 
             <p className="mt-4">Manager : {league.manager_username}</p>
             <p>Sport : {league.sport_type}</p>
             <p>État : {league.is_active ? "Active" : "Inactive"}</p>
