@@ -1,14 +1,16 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/app/components/AuthProvider";
+import type {Team}  from "@/app/types/league"
 
 
 type CreateTeamModalProps = {
     leagueId: string;
     onClose: () => void;
+    onCreated: (team : Team) => void;
 };
 
-export default function CreateTeamModal({ onClose, leagueId }: CreateTeamModalProps) {
+export default function CreateTeamModal({ onClose, leagueId, onCreated }: CreateTeamModalProps) {
     const { accessToken, authFetch } = useAuth();
     const [errorMessage, setErrorMessage] = useState("");
     const [equipe, setEquipe] = useState({
@@ -19,11 +21,11 @@ export default function CreateTeamModal({ onClose, leagueId }: CreateTeamModalPr
     })
 
     function handleChanges(e: React.ChangeEvent<HTMLInputElement>) {
-    const changes = e.target.name;
-    const nouvelleValeur = e.target.value;
-    const nouvelObjet = { ...equipe, [changes]: nouvelleValeur };
-    setEquipe(nouvelObjet);
-  }
+        const changes = e.target.name;
+        const nouvelleValeur = e.target.value;
+        const nouvelObjet = { ...equipe, [changes]: nouvelleValeur };
+        setEquipe(nouvelObjet);
+    }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -38,7 +40,9 @@ export default function CreateTeamModal({ onClose, leagueId }: CreateTeamModalPr
             });
 
             if (response.ok) {
-               onClose();
+                const team = await response.json();
+                onCreated(team);
+                onClose();
             } else {
                 const errorData = await response.json();
                 if (Array.isArray(errorData.detail)) {

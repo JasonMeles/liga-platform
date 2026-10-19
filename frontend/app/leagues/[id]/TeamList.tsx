@@ -32,7 +32,7 @@ export default function TeamList({ leagueId, maxTeams, maxPerPlayer }: { leagueI
     return (
         <section className="mt-12 w-full max-w-5xl">
             <h2 className="font-display text-2xl text-ink">Équipes</h2>
-            {showModal && <CreateTeamModal onClose={() => setShowModal(false)} leagueId = {leagueId} />}
+            {showModal && <CreateTeamModal onClose={() => setShowModal(false)} leagueId = {leagueId} onCreated={(team) => setTeams([...(teams ?? []), team])} />}
             <button onClick={() => setShowModal(true)}>Inscrire une équipe</button>
             {error && <p className="mt-6 text-red-600">{error}</p>}
             {!error && teams === null && <p className="mt-6">Chargement…</p>}
