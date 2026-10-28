@@ -71,7 +71,10 @@ def generate_matches(equipes: list, total_journeys: int, allow_same_owner_matche
         # 2. Corriger les paires interdites si l'option est désactivée
         if not allow_same_owner_matches:
             paires = resoudre_conflits_journee(paires)
-
+        # 2b. Alterner domicile/extérieur une journée sur deux
+        if i % 2 == 1:
+            paires = [(b, a) for a, b in paires]
+            
         # 3. Créer les objets Match à partir des paires (corrigées ou non)
         for equipe_a, equipe_b in paires:
             match = Match(
