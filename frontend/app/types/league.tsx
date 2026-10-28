@@ -29,3 +29,15 @@ export type Team = {
     owner_username: string;   // "AI" pour une équipe IA
     journeys_remaining: number;
 };
+
+export type Match = {
+  id: number;
+  team_home: string;
+  team_away: string;
+  score_home: number | null;   // null tant que le match n'est pas joué
+  score_away: number | null;
+  state: "PENDING" | "IN_PROGRESS" | "FINISHED";
+  scheduled_at: string | null;
+  stadium: string;
+  round_number: number;
+};

@@ -6,6 +6,7 @@ import { useRequireAuth } from "../../hooks/useRequireAuth";
 import type { LeagueDetail } from "@/app/types/league";
 import InviteCode from "./InviteCode";
 import TeamList from "./TeamList";
+import Calendar from "./Calendar";
 
 
 export default function LeaguePage() {
@@ -58,6 +59,7 @@ export default function LeaguePage() {
             <p>Journées : {league.total_journeys}</p>
             <p>Rôle : {league.my_role}</p>
             <TeamList leagueId={id} maxTeams={league.max_teams} maxPerPlayer={league.max_per_player} myRole={league.my_role} onLaunchLeague={() => setLeague({ ...league, is_active: true })} isActive={league.is_active}/>
+            {league.is_active && <Calendar leagueId={id} />}
         </main>
     );
 }
