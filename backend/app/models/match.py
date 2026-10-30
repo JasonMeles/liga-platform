@@ -10,6 +10,7 @@ class MatchState(str, enum.Enum):
     pending = "PENDING"
     in_progress = "IN_PROGRESS"
     finished = "FINISHED"
+    contested = "CONTESTED"
 
 class Match(Base):
     __tablename__ = "match"
@@ -23,6 +24,8 @@ class Match(Base):
     state = Column(Enum(MatchState), nullable=False, default=MatchState.pending)
     scheduled_at = Column(DateTime, nullable=True)
     round_number = Column(Integer, nullable=False, server_default="0")
+    score_submitted_at = Column(DateTime(timezone=True), nullable=True)
     team_home = relationship("Team", foreign_keys=[team_home_id], passive_deletes=True)
     team_away = relationship("Team", foreign_keys=[team_away_id], passive_deletes=True)
+    
     
