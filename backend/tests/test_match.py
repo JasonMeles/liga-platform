@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import select
 from app.models.player import PlayerLeague, LeagueRoleEnum
 from app.models.match import Match, MatchState
+from app.models.feed_item import FeedItem, MessageTypeEnum
 
 
 @pytest.mark.asyncio
@@ -87,7 +88,9 @@ async def test_score_by_team_home_owner(client, auth_headers, match_setup, db_se
     # Assert
     assert response2.status_code == 200
     data = response2.json()
-    assert data["message"] == "Score mis à jour"
+    assert "contestable" in data["message"]
+    assert match.state == MatchState.finished
+    assert match.score_submitted_at is not None
     assert match.score_home == 2
     assert match.score_away == 1
 
@@ -109,7 +112,9 @@ async def test_score_by_team_away_owner(client, auth_headers_2, match_setup, db_
     # Assert
     assert response2.status_code == 200
     data = response2.json()
-    assert data["message"] == "Score mis à jour"
+    assert "contestable" in data["message"]
+    assert match.state == MatchState.finished
+    assert match.score_submitted_at is not None
     assert match.score_home == 3
     assert match.score_away == 2
 
@@ -148,7 +153,9 @@ async def test_score_by_manager(client, auth_headers, auth_headers_2, db_session
     # Assert
     assert response2.status_code == 200
     data = response2.json()
-    assert data["message"] == "Score mis à jour"
+    assert "contestable" in data["message"]
+    assert match.state == MatchState.finished
+    assert match.score_submitted_at is not None
     assert match.score_home == 1
     assert match.score_away == 0   
 
@@ -208,7 +215,7 @@ async def test_score_unauthorized(client, auth_headers, auth_headers_2, match_se
     assert "Vous ne controlez aucune de ces équipes et vous n'êtes pas manager de la ligue" in data["detail"]
 
 @pytest.mark.asyncio
-async def test_finish_match_success(client, auth_headers, match_setup, db_session):
+async def test_score_creates_feed_event(client, auth_headers, match_setup, db_session):
     # Arrange
     match_id = match_setup["match_id1"]
     score_data = {
@@ -220,45 +227,48 @@ async def test_finish_match_success(client, auth_headers, match_setup, db_sessio
     await client.put(f"/matches/{match_id}/start", headers=auth_headers)
     response = await client.put(f"/matches/{match_id}/score", json=score_data, headers=auth_headers)
 
-    # Act — on termine le match
-    response2 = await client.put(f"/matches/{match_id}/finish", headers=auth_headers)
+    # Act — on vérifie le feed et l’état en base
+    result = await db_session.execute(
+    select(FeedItem).filter(FeedItem.match_id == match_id)
+    )
+    feed_item = result.scalars().first()
+    
     match = await db_session.execute(select(Match).filter(Match.id == match_id))
     match = match.scalars().first()
 
     # Assert
-    assert response2.status_code == 200
-    data = response2.json()
-    assert data["message"] == "Le match est terminé"
+    assert feed_item is not None
+    assert feed_item.type == MessageTypeEnum.match_event
     assert match.state == MatchState.finished
 
+
 @pytest.mark.asyncio
-async def test_finish_match_no_score(client, auth_headers, match_setup):
+async def test_score_already_finished(client, auth_headers, match_setup, db_session):
     # Arrange
     match_id = match_setup["match_id1"]
+    vrai_score = {"home_score": 2, "away_score": 1}
+    score_triche = {"home_score": 0, "away_score": 3}
 
-    # Act — on démarre le match
+    # Act — on démarre le match et on saisit le vrai score (le match passe à finished)
     await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    response1 = await client.put(f"/matches/{match_id}/score", json=vrai_score, headers=auth_headers)
 
-    # Act — on tente de terminer le match sans avoir mis à jour le score
-    response = await client.put(f"/matches/{match_id}/finish", headers=auth_headers)
+    # Act — on tente de ressaisir un autre score sur le match déjà terminé
+    response2 = await client.put(f"/matches/{match_id}/score", json=score_triche, headers=auth_headers)
 
-    # Assert
-    assert response.status_code == 400
-    data = response.json()
-    assert "Le score doit être défini pour terminer le match" in data["detail"]
+    # On relit le match en base
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
 
+    # Assert — la première saisie a réussi
+    assert response1.status_code == 200
 
-@pytest.mark.asyncio
-async def test_finish_match_not_in_progress(client, auth_headers, match_setup):
-    # Arrange
-    match_id = match_setup["match_id1"]
+    # Assert — la deuxième est refusée
+    assert response2.status_code == 400
+    assert "Le match n'est pas en cours" in response2.json()["detail"]
 
-    # Act — on tente de terminer le match sans l'avoir démarré
-    response = await client.put(f"/matches/{match_id}/finish", headers=auth_headers)
-
-    # Assert
-    assert response.status_code == 400
-    data = response.json()
-    assert "Le match n'est pas en cours" in data["detail"]
+    # Assert — la base a gardé le vrai score
+    assert match.score_home == 2
+    assert match.score_away == 1
 
 
