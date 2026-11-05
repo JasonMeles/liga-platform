@@ -3,6 +3,30 @@ from sqlalchemy import select
 from app.models.player import PlayerLeague, LeagueRoleEnum
 from app.models.match import Match, MatchState
 from app.models.feed_item import FeedItem, MessageTypeEnum
+import random
+
+async def ligue_lancee(client, headers_manager, equipes, sport_type="football", headers_membres=()):
+    """Crée une ligue, inscrit les équipes, la lance et renvoie l'id du premier match.
+    equipes : liste de (headers du propriétaire, is_ia)"""
+    league_data = {
+        "name": "Ligue Simu",
+        "max_teams": len(equipes),
+        "max_per_player": len(equipes),
+        "total_journeys": 2,
+        "sport_type": sport_type,
+    }
+    league = (await client.post("/leagues/", json=league_data, headers=headers_manager)).json()
+    for headers in headers_membres:
+        await client.post("/leagues/join", json={"invite_code": league["invite_code"]}, headers=headers)
+    for i, (headers, is_ia) in enumerate(equipes):
+        await client.post("/teams/", json={
+            "nom": f"Team {i + 1}", "nom_stade": f"Stade {i + 1}",
+            "id_league": league["id"], "is_ia": is_ia,
+        }, headers=headers)
+    await client.post(f"/leagues/{league['id']}/validate", json={}, headers=headers_manager)
+    calendar = (await client.get(f"/leagues/{league['id']}/calendar", headers=headers_manager)).json()
+    return calendar[0]["id"]
+
 
 
 @pytest.mark.asyncio
@@ -272,3 +296,82 @@ async def test_score_already_finished(client, auth_headers, match_setup, db_sess
     assert match.score_away == 1
 
 
+import random   # à ajouter dans les imports
+
+@pytest.mark.asyncio
+async def test_simulate_basket_no_draw(client, auth_headers, db_session, monkeypatch):
+    # Arrange — ligue de basket IA vs IA, tirage truqué : toujours 100
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, True), (auth_headers, True)],
+                                  sport_type="basketball")
+    monkeypatch.setattr(random, "randint", lambda a, b: 100)
+
+    # Act
+    response = await client.put(f"/matches/{match_id}/simulate", headers=auth_headers)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — l'égalité a été cassée : une équipe a 100, l'autre 101
+    assert response.status_code == 200
+    assert {match.score_home, match.score_away} == {100, 101}
+    assert match.state == MatchState.finished
+    assert match.score_submitted_at is None
+
+@pytest.mark.asyncio
+async def test_simulate_two_humans_is_contestable(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+
+    # Act
+    response = await client.put(f"/matches/{match_id}/simulate", headers=auth_headers)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert
+    assert response.status_code == 200
+    assert match.state == MatchState.finished
+    assert 0 <= match.score_home <= 5
+    assert 0 <= match.score_away <= 5
+    assert match.score_submitted_at is not None   # deux humains → contestable
+
+@pytest.mark.asyncio
+async def test_simulate_already_finished(client, auth_headers, db_session, monkeypatch):
+    # Arrange — ligue IA vs IA, premier tirage truqué à 1
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, True), (auth_headers, True)])
+    monkeypatch.setattr(random, "randint", lambda a, b: 1)
+
+    # Act — première simulation (acceptée), puis tentative de relance avec un tirage à 4
+    response1 = await client.put(f"/matches/{match_id}/simulate", headers=auth_headers)
+    monkeypatch.setattr(random, "randint", lambda a, b: 4)
+    response2 = await client.put(f"/matches/{match_id}/simulate", headers=auth_headers)
+
+    # Lecture en base une seule fois, à la fin (évite le cache de db_session)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — la relance est refusée et le premier score est conservé
+    assert response1.status_code == 200
+    assert response2.status_code == 400
+    assert match.score_home == 1
+    assert match.score_away == 1
+
+
+@pytest.mark.asyncio
+async def test_simulate_unauthorized(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — humain vs IA : le manager (joueur 1) crée l'IA, le joueur 2 son équipe
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, True), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+
+    # Act — le manager tente de simuler à la place du joueur humain
+    response = await client.put(f"/matches/{match_id}/simulate", headers=auth_headers)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — refusé, le match n'a pas bougé
+    assert response.status_code == 403
+    assert match.state == MatchState.pending
+    assert match.score_submitted_at is None
