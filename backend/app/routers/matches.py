@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from app.database.connection import get_db
 from app.models.match import Match, MatchState
 from app.models.team import Team
-from app.models.player import Player, PlayerLeague, LeagueRoleEnum, PlayerTypeEnum
+from app.models.player import Player, PlayerLeague, LeagueRoleEnum, SportTypeEnum, League, PlayerTypeEnum
 from app.core.dependencies import get_current_player
 from app.models.feed_item import MessageTypeEnum, FeedItem
 from app.services.match_validation import CONTESTATION_DELAY
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import logging
+import random
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/matches", tags=["matches"])
@@ -85,7 +87,8 @@ async def update_score(
             type=MessageTypeEnum.match_event,
             match_id=match_id,
             match = match,
-            league_id=match.league_id
+            league_id=match.league_id,
+            content=f"{team_home.nom} {match.score_home} - {match.score_away} {team_away.nom}"
         )
     db.add(feed_item)
     await db.commit()
@@ -95,3 +98,93 @@ async def update_score(
     minutes = int(CONTESTATION_DELAY.total_seconds() // 60)
     return {"message": f"Score enregistré, contestable pendant {minutes} minutes"}
 
+@router.put("/{match_id}/simulate")
+async def simulate_match(
+    match_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player)
+):
+    # --- Bloc 1 : le match existe ? ---
+    result = await db.execute(select(Match).where(Match.id == match_id))
+    match = result.scalar_one_or_none()
+    if match is None:
+        logger.warning(f"Simulation : match {match_id} introuvable (demandé par {current_player.username})")
+        raise HTTPException(status_code=404, detail="Match introuvable")
+
+    # --- Bloc 2 : le match peut-il encore être simulé ? (anti-relance) ---
+    if match.state not in (MatchState.pending, MatchState.in_progress):
+        logger.warning(f"Simulation refusée : match {match_id} déjà joué (état : {match.state})")
+        raise HTTPException(status_code=400, detail=f"Ce match ne peut plus être simulé (état actuel : {match.state})")
+
+    # --- Bloc 3 : charger la ligue et les équipes AVEC leur propriétaire ---
+    result = await db.execute(select(League).where(League.id == match.league_id))
+    league = result.scalar_one()
+
+    result = await db.execute(select(Team).options(joinedload(Team.owner)).where(Team.id == match.team_home_id))
+    team_home = result.scalar_one()
+    result = await db.execute(select(Team).options(joinedload(Team.owner)).where(Team.id == match.team_away_id))
+    team_away = result.scalar_one()
+
+    home_ia = team_home.owner.player_type == PlayerTypeEnum.ia
+    away_ia = team_away.owner.player_type == PlayerTypeEnum.ia
+
+    # --- Bloc 4 : qui a le droit de simuler ? ---
+    contestable = False
+    if home_ia and away_ia:
+        # IA vs IA → seul le manager
+        result = await db.execute(select(PlayerLeague).where(
+            PlayerLeague.league_id == match.league_id,
+            PlayerLeague.role == LeagueRoleEnum.manager,
+        ))
+        manager = result.scalar_one_or_none()
+        autorise = manager is not None and manager.player_id == current_player.id
+    elif home_ia or away_ia:
+        # Humain vs IA → seul le propriétaire humain
+        equipe_humaine = team_away if home_ia else team_home
+        autorise = current_player.id == equipe_humaine.id_owner
+    elif team_home.id_owner == team_away.id_owner:
+        # Même propriétaire → ce propriétaire
+        autorise = current_player.id == team_home.id_owner
+    else:
+        # Deux humains différents → l'un des deux, et le score sera contestable
+        autorise = current_player.id in (team_home.id_owner, team_away.id_owner)
+        contestable = True
+
+    if not autorise:
+        logger.warning(f"Simulation refusée : {current_player.username} n'a pas le droit de simuler le match {match_id}")
+        raise HTTPException(status_code=403, detail="Vous n'avez pas le droit de simuler ce match")
+
+    # --- Bloc 5 : tirer le score selon le sport ---
+    if league.sport_type == SportTypeEnum.football:
+        match.score_home = random.randint(0, 5)
+        match.score_away = random.randint(0, 5)
+    elif league.sport_type == SportTypeEnum.basketball:
+        match.score_home = random.randint(70, 120)
+        match.score_away = random.randint(70, 120)
+        if match.score_home == match.score_away:
+            # Pas d'égalité au basket : +1 à une équipe au hasard
+            if random.choice(["home", "away"]) == "home":
+                match.score_home += 1
+            else:
+                match.score_away += 1
+
+    # --- Bloc 6 : terminer le match, feed, commit ---
+    match.state = MatchState.finished
+    match.score_submitted_at = datetime.now(timezone.utc) if contestable else None
+
+    feed_item = FeedItem(
+        type=MessageTypeEnum.match_event,
+        match_id=match_id,
+        match=match,
+        league_id=match.league_id,
+        content=f"{team_home.nom} {match.score_home} - {match.score_away} {team_away.nom}"
+    )
+    db.add(feed_item)
+    await db.commit()
+    await db.refresh(match)
+
+    logger.info(f"{current_player.username} a simulé le match {match_id} : {match.score_home}-{match.score_away}")
+    if contestable:
+        minutes = int(CONTESTATION_DELAY.total_seconds() // 60)
+        return {"message": f"Score simulé, contestable pendant {minutes} minutes"}
+    return {"message": "Score simulé et validé"}
