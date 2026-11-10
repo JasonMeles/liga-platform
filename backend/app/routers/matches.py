@@ -8,7 +8,7 @@ from app.models.team import Team
 from app.models.player import Player, PlayerLeague, LeagueRoleEnum, SportTypeEnum, League, PlayerTypeEnum
 from app.core.dependencies import get_current_player
 from app.models.feed_item import MessageTypeEnum, FeedItem
-from app.services.match_validation import CONTESTATION_DELAY
+from app.services.match_validation import CONTESTATION_DELAY, est_contestable
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import logging
@@ -188,3 +188,88 @@ async def simulate_match(
         minutes = int(CONTESTATION_DELAY.total_seconds() // 60)
         return {"message": f"Score simulé, contestable pendant {minutes} minutes"}
     return {"message": "Score simulé et validé"}
+
+@router.put("/{match_id}/contest")
+async def contest_match(
+    match_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player)
+):
+    result = await db.execute(select(Match).where(Match.id == match_id))
+    match = result.scalar_one_or_none()
+    if match is None:
+        logger.warning(f"Contest : match {match_id} introuvable (demandé par {current_player.username})")
+        raise HTTPException(status_code=404, detail="Match introuvable")
+    id_home = match.team_home_id
+    id_away = match.team_away_id
+    result2 =  await db.execute(select(Team).where(Team.id == id_home))
+    team_home = result2.scalar_one()
+    result3 = await db.execute(select(Team).where(Team.id == id_away))
+    team_away = result3.scalar_one()
+    if current_player.id != team_away.id_owner and current_player.id != team_home.id_owner:
+        logger.warning(f"Tentative de contestation refusée : {current_player.username} ne contrôle aucune équipe du match {match_id}")
+        raise HTTPException(status_code=403, detail="Vous ne controlez aucune de ces équipes")
+    if not est_contestable(match):
+        logger.warning(f"Contest refusé : match {match_id} non contestable (état : {match.state})")
+        raise HTTPException(status_code=400, detail=f"Ce match n'est pas contestable (état actuel : {match.state})")
+    # Le score reste tel quel, mais le match passe en attente de réponse du manager
+    match.state = MatchState.contested
+    feed_item = FeedItem(
+            type=MessageTypeEnum.match_event,
+            match_id=match_id,
+            match=match,
+            league_id=match.league_id,
+            content=f"Le score du match {team_home.nom} {match.score_home} - {match.score_away} {team_away.nom} a été contesté par {current_player.username}"
+        )
+    db.add(feed_item)
+    await db.commit()
+    await db.refresh(match)
+    logger.info(f"{current_player.username} a contesté le score du match {match_id}")
+    return {"message": "Le score a été contesté et le match est de nouveau en attente"}
+
+@router.put("/{match_id}/resolve")
+async def resolve_contestation(
+    match_id: int,
+    score: Score,
+    db: AsyncSession = Depends(get_db),
+    current_player: Player = Depends(get_current_player)
+):
+    result = await db.execute(select(Match).where(Match.id == match_id))
+    match = result.scalar_one_or_none()
+    
+    if match is None:
+        logger.warning(f"Resolve : match {match_id} introuvable (demandé par {current_player.username})")
+        raise HTTPException(status_code=404, detail="Match introuvable")
+    id_home = match.team_home_id
+    id_away = match.team_away_id
+    result2 =  await db.execute(select(Team).where(Team.id == id_home))
+    team_home = result2.scalar_one()
+    result3 = await db.execute(select(Team).where(Team.id == id_away))
+    team_away = result3.scalar_one()
+    result1 = await db.execute(select(PlayerLeague).filter( PlayerLeague.league_id == match.league_id, PlayerLeague.role == LeagueRoleEnum.manager ))
+    manager = result1.scalar_one_or_none()
+    if manager is None or manager.player_id != current_player.id:
+        logger.warning(f"Tentative de résolution de contestation refusée : {current_player.username} n'est pas manager de la ligue pour le match {match_id}")
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas manager de la ligue pour ce match")
+    if match.state != MatchState.contested:
+        logger.warning(f"Resolve refusé : match {match_id} non contesté (état : {match.state})")
+        raise HTTPException(status_code=400, detail=f"Ce match n'est pas contesté (état actuel : {match.state})")
+    
+    #Enreistrer le score entré par le manager, et mettre le match en terminé
+    match.score_home = score.home_score
+    match.score_away = score.away_score
+    match.score_submitted_at = None
+    match.state = MatchState.finished
+    feed_item = FeedItem(
+            type=MessageTypeEnum.match_event,
+            match_id=match_id,
+            match=match,
+            league_id=match.league_id,
+            content=f"La contestation du score du match a été résolue par le manager {current_player.username}, le score final du match {team_home.nom} - {team_away.nom} est {match.score_home} - {match.score_away}"
+        )
+    db.add(feed_item)
+    await db.commit()
+    await db.refresh(feed_item)
+    await db.refresh(match)
+    logger.info(f"{current_player.username} a résolu la contestation du score du match {match_id}")
+    return {"message": "La contestation a été résolue et le match est terminé"}
