@@ -3,6 +3,8 @@ from sqlalchemy import select
 from app.models.player import PlayerLeague, LeagueRoleEnum
 from app.models.match import Match, MatchState
 from app.models.feed_item import FeedItem, MessageTypeEnum
+from datetime import datetime, timezone, timedelta
+from app.services.match_validation import CONTESTATION_DELAY
 import random
 
 async def ligue_lancee(client, headers_manager, equipes, sport_type="football", headers_membres=()):
@@ -27,7 +29,13 @@ async def ligue_lancee(client, headers_manager, equipes, sport_type="football", 
     calendar = (await client.get(f"/leagues/{league['id']}/calendar", headers=headers_manager)).json()
     return calendar[0]["id"]
 
-
+async def creer_joueur(client, username):
+    """Inscrit et connecte un joueur, renvoie ses headers d'authentification."""
+    password = "SuperMotDePasse12345"
+    await client.post("/auth/register", json={
+        "username": username, "email": f"{username.lower()}@example.com", "password": password})
+    login = await client.post("/auth/login", data={"username": username, "password": password})
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 @pytest.mark.asyncio
 async def test_start_match_success(client, auth_headers, match_setup):
@@ -296,8 +304,6 @@ async def test_score_already_finished(client, auth_headers, match_setup, db_sess
     assert match.score_away == 1
 
 
-import random   # à ajouter dans les imports
-
 @pytest.mark.asyncio
 async def test_simulate_basket_no_draw(client, auth_headers, db_session, monkeypatch):
     # Arrange — ligue de basket IA vs IA, tirage truqué : toujours 100
@@ -375,3 +381,230 @@ async def test_simulate_unauthorized(client, auth_headers, auth_headers_2, db_se
     assert response.status_code == 403
     assert match.state == MatchState.pending
     assert match.score_submitted_at is None
+
+@pytest.mark.asyncio
+async def test_contest_match_ok(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+    
+    # Act — on conteste le match avec le joueur 2
+    response = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    response2 = await db_session.execute(select(FeedItem).filter(FeedItem.match_id == match_id))
+    feeds = response2.scalars().all()
+    match = result.scalars().first()
+
+    # Assert — le match est repassé à contesté et un feed a été créé
+    assert response.status_code == 200
+    assert match.state == MatchState.contested
+    assert any("contesté par" in f.content for f in feeds)
+    assert (match.score_home, match.score_away) == (2, 1)
+
+@pytest.mark.asyncio
+async def test_contest_unauthorized(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents Charlie, troisième joueur (sera spectateur)
+    charlie_headers = await creer_joueur(client, "Charlie")
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2, charlie_headers])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    # Act — on tente de contester le match avec un joueur qui n'est pas propriétaire de l'équipe
+    response = await client.put(f"/matches/{match_id}/contest", headers=charlie_headers)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()  
+
+    # Assert — le match n'a pas été contesté
+    assert response.status_code == 403
+    assert match.state == MatchState.finished
+
+@pytest.mark.asyncio
+async def test_contest_simulated_match(client, auth_headers, auth_headers_2, db_session):
+    #  Arrange — humain vs IA : le joueur 2 simule (non contestable)
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, True), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    r = await client.put(f"/matches/{match_id}/simulate", headers=auth_headers_2)
+    assert r.status_code == 200
+
+    # Act — on tente de contester le match avec le joueur 2
+    response = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — refusé : un match simulé contre l'IA n'est pas contestable
+    assert response.status_code == 400
+    assert match.state == MatchState.finished
+
+@pytest.mark.asyncio
+async def test_contest_after_delay(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    # On modifie la date de soumission du score pour simuler un dépassement du délai de contestation
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+    match.score_submitted_at = datetime.now(timezone.utc) - CONTESTATION_DELAY - timedelta(minutes=1)
+    await db_session.commit()
+
+    # Act — on tente de contester le match avec le joueur 2 après le délai
+    response = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — refusé : le délai de contestation est dépassé
+    assert response.status_code == 400
+    assert "n'est pas contestable" in response.json()["detail"]
+    assert match.state == MatchState.finished
+
+@pytest.mark.asyncio
+async def test_contest_twice(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    #Arrange — on conteste le match avec le joueur 2 une première fois
+    response1 = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    assert response1.status_code == 200
+
+    # Act — on tente de contester le match une deuxième fois avec le même joueur
+    response2 = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    result2 = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match1 = result2.scalars().first()
+    feeds = (await db_session.execute(select(FeedItem).filter(FeedItem.match_id == match_id))).scalars().all()
+
+    # Assert — la deuxième contestation est refusée car le match est déjà contesté
+    assert response2.status_code == 400
+    assert "n'est pas contestable" in response2.json()["detail"]
+    assert sum("contesté par" in f.content for f in feeds) == 1
+    assert match1.state == MatchState.contested
+
+@pytest.mark.asyncio
+async def test_resolve_match_ok(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    # Arrange — on conteste le match avec le joueur 2
+    response1 = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    assert response1.status_code == 200
+
+    # Act — on résout le match avec le manager (joueur 1)
+    response2 = await client.put(f"/matches/{match_id}/resolve", json={"home_score": 3, "away_score": 0}, headers=auth_headers)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+    feeds = (await db_session.execute(select(FeedItem).filter(FeedItem.match_id == match_id))).scalars().all()
+
+    # Assert — le match est repassé à finished et le score a été mis à jour
+    assert response2.status_code == 200
+    assert match.state == MatchState.finished
+    assert (match.score_home, match.score_away) == (3, 0)
+    assert match.score_submitted_at is None
+    assert any("résolue par" in f.content for f in feeds)
+
+@pytest.mark.asyncio
+async def test_resolve_match_unauthorized(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    # Arrange — on conteste le match avec le joueur 2
+    response1 = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    assert response1.status_code == 200
+
+    # Act — on tente de résoudre le match avec le joueur 2 (non manager)
+    response2 = await client.put(f"/matches/{match_id}/resolve", json={"home_score": 3, "away_score": 0}, headers=auth_headers_2)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — refusé : seul le manager peut résoudre un match contesté
+    assert response2.status_code == 403
+    assert match.state == MatchState.contested
+    assert "Vous n'êtes pas manager de la ligue pour ce match" in response2.json()["detail"]
+    assert (match.score_home, match.score_away) == (2, 1)
+
+@pytest.mark.asyncio
+async def test_resolve_match_not_contested(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    # Act — on tente de résoudre le match avec le manager alors qu'il n'est pas contesté
+    response2 = await client.put(f"/matches/{match_id}/resolve", json={"home_score": 3, "away_score": 0}, headers=auth_headers)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+
+    # Assert — refusé : le match n'est pas contesté
+    assert response2.status_code == 400
+    assert match.state == MatchState.finished
+    assert "n'est pas contesté" in response2.json()["detail"]
+    assert (match.score_home, match.score_away) == (2, 1)
+
+@pytest.mark.asyncio
+async def test_contest_after_resolve(client, auth_headers, auth_headers_2, db_session):
+    # Arrange — ligue de football, deux humains différents
+    match_id = await ligue_lancee(client, auth_headers,
+                                  [(auth_headers, False), (auth_headers_2, False)],
+                                  headers_membres=[auth_headers_2])
+    
+    await client.put(f"/matches/{match_id}/start", headers=auth_headers)
+    r = await client.put(f"/matches/{match_id}/score", json={"home_score": 2, "away_score": 1}, headers=auth_headers)
+    assert r.status_code == 200
+
+    # Arrange — on conteste le match avec le joueur 2
+    response1 = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    assert response1.status_code == 200
+
+    # Arrange — on résout le match avec le manager (joueur 1)
+    response2 = await client.put(f"/matches/{match_id}/resolve", json={"home_score": 3, "away_score": 0}, headers=auth_headers)
+    assert response2.status_code == 200
+
+    # Act — on tente de contester le match après résolution
+    response3 = await client.put(f"/matches/{match_id}/contest", headers=auth_headers_2)
+    result = await db_session.execute(select(Match).filter(Match.id == match_id))
+    match = result.scalars().first()
+    feeds = (await db_session.execute(select(FeedItem).filter(FeedItem.match_id == match_id))).scalars().all()
+    
+
+    # Assert — refusé : le match n'est plus contestable après résolution
+    assert response3.status_code == 400
+    assert "n'est pas contestable" in response3.json()["detail"]
+    assert match.state == MatchState.finished
+    assert (match.score_home, match.score_away) == (3, 0)              # la décision du manager reste intacte
+    assert sum("contesté par" in f.content for f in feeds) == 1        # la tentative n'a rien écrit
